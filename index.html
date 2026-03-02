@@ -275,6 +275,9 @@
       transform: rotateY(180deg);
     }
 
+    .flip-card.flipped .flip-front  { visibility: hidden; }
+    .flip-card:not(.flipped) .flip-back { visibility: hidden; }
+
     .flip-front,
     .flip-back {
       position: absolute;
