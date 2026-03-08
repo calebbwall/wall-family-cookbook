@@ -440,6 +440,31 @@ OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
 ${CARD_TEMPLATE(cardId, authorName)}`;
 }
 
+function buildUrlPrompt(url, category, authorName, cardId) {
+  return `You are a recipe formatter for a family cookbook website. Visit this URL and extract the recipe, then convert it into a single HTML block.
+
+URL: ${url}
+
+Go to that URL, read the recipe on the page, and format it as a flip card.
+
+CRITICAL OUTPUT RULES:
+- Output ONLY the raw HTML starting with <div class="flip-card" — nothing else before or after
+- No markdown, no backticks, no explanation, no preamble
+- Use ONLY the exact CSS class names listed in the template
+- Escape HTML entities: use &amp; for &, &lt; for <, &gt; for >
+- If any info is missing, make a reasonable inference — never output "N/A" or "Unknown"
+- The card ID is: ${cardId}
+- The final line must be exactly: </div><!-- /flip-card -->
+
+RECIPE INFO:
+Category: ${category}
+Added by: ${authorName}
+
+OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
+
+${CARD_TEMPLATE(cardId, authorName)}`;
+}
+
 function buildEditPrompt(existingCardText, editInstructions, cardId) {
   // Extract author from text if possible (look for "Added by NAME" pattern)
   const authorMatch = existingCardText.match(/Added by\s+(\w+)/i);
@@ -472,15 +497,19 @@ ${CARD_TEMPLATE(cardId, authorName)}`;
 
 // ── Gemini call ───────────────────────────────────────────────────────────────
 
-async function generateCardHtml(prompt) {
+async function generateCardHtml(prompt, useSearch = false) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set in Replit Secrets');
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
+  const modelConfig = {
     model: 'gemini-2.5-flash',
     generationConfig: { temperature: 0.4, maxOutputTokens: 8000, thinkingConfig: { thinkingBudget: 0 } },
-  });
+  };
+  if (useSearch) {
+    modelConfig.tools = [{ googleSearch: {} }];
+  }
+  const model = genAI.getGenerativeModel(modelConfig);
 
   let cardHtml = '';
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -664,21 +693,34 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
     if (!authorName || authorName.trim().length < 1 || authorName.trim().length > 40) {
       return res.status(400).json({ error: 'Please enter your name (max 40 characters)' });
     }
-    if (!recipeInput || recipeInput.trim().length < 20) {
+    const isLink = /^https?:\/\/.+/i.test((recipeInput || '').trim());
+    if (!recipeInput || (!isLink && recipeInput.trim().length < 20)) {
       return res.status(400).json({ error: 'Recipe is too short — please paste more detail' });
     }
 
     let recipeText = recipeInput.trim();
-    if (/^https?:\/\/.+/i.test(recipeText)) {
-      recipeText = await fetchUrlContent(recipeText);
+    const isUrl = /^https?:\/\/.+/i.test(recipeText);
+
+    if (isUrl) {
+      try {
+        recipeText = await fetchUrlContent(recipeText);
+      } catch {
+        // Server fetch failed — will pass URL directly to Gemini instead
+      }
     }
 
     const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
-    const firstLine   = recipeText.split('\n')[0].slice(0, 80);
+    const firstLine   = isUrl ? recipeText.split('\n')[0].slice(0, 80) : recipeText.split('\n')[0].slice(0, 80);
     const cardId      = generateUniqueId(currentHtml, firstLine);
 
-    const prompt   = buildPrompt(recipeText, category, authorName.trim(), cardId);
-    const cardHtml = await generateCardHtml(prompt);
+    let prompt, cardHtml;
+    if (isUrl && /^https?:\/\/.+/i.test(recipeText)) {
+      prompt = buildUrlPrompt(recipeText, category, authorName.trim(), cardId);
+      cardHtml = await generateCardHtml(prompt, true);
+    } else {
+      prompt = buildPrompt(recipeText, category, authorName.trim(), cardId);
+      cardHtml = await generateCardHtml(prompt);
+    }
 
     const updatedHtml = injectCard(currentHtml, category, cardHtml);
 
