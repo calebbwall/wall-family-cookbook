@@ -1,0 +1,14 @@
+{
+  "name": "wall-family-cookbook",
+  "version": "1.0.0",
+  "description": "Wall Family Cookbook — dynamic recipe website",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "@google/generative-ai": "^0.21.0"
+  }
+}
