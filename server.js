@@ -641,7 +641,6 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
 
     const updatedHtml = injectCard(currentHtml, category, cardHtml);
 
-    await pushToGitHub(updatedHtml, `Add recipe: ${firstLine}`);
     await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
 
     res.json({ success: true, cardId });
@@ -678,7 +677,6 @@ app.post('/api/edit-recipe', requireAuth, async (req, res) => {
     const titleMatch  = newCardHtml.match(/class="front-title">([^<]+)</);
     const recipeName  = titleMatch ? titleMatch[1] : cardId;
 
-    await pushToGitHub(updatedHtml, `Edit recipe: ${recipeName}`);
     await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
 
     res.json({ success: true, cardId });
@@ -746,5 +744,4 @@ Your role:
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-await syncFromGitHub();
 app.listen(PORT, '0.0.0.0', () => console.log(`Wall Family Cookbook running on http://0.0.0.0:${PORT}`));
