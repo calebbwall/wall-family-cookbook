@@ -1,0 +1,25 @@
+name: Auto-merge claude/* into master
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge into master
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout master
+          git merge --no-ff "${{ github.ref_name }}" -m "Auto-merge ${{ github.ref_name }} into master"
+          git push origin master
