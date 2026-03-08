@@ -28,7 +28,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HTML_PATH  = path.join(__dirname, 'index.html');
-const PORT       = process.env.PORT || 3000;
+const PORT       = process.env.PORT || 5000;
 
 const GITHUB_OWNER = process.env.GITHUB_OWNER || 'calebbwall';
 const GITHUB_REPO  = process.env.GITHUB_REPO  || 'wall-family-cookbook';
@@ -587,7 +587,7 @@ app.post('/api/login', (req, res) => {
   const { passphrase } = req.body || {};
   if (makeAuthToken(passphrase || '') === VALID_TOKEN) {
     res.setHeader('Set-Cookie',
-      `${COOKIE_NAME}=${VALID_TOKEN}; HttpOnly; SameSite=Strict; Max-Age=${COOKIE_MAX_AGE}; Path=/`
+      `${COOKIE_NAME}=${VALID_TOKEN}; HttpOnly; SameSite=None; Secure; Max-Age=${COOKIE_MAX_AGE}; Path=/`
     );
     return res.redirect(302, '/');
   }
@@ -595,7 +595,7 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Max-Age=0; Path=/`);
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; SameSite=None; Secure; Max-Age=0; Path=/`);
   res.redirect(302, '/');
 });
 
@@ -747,4 +747,4 @@ Your role:
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 await syncFromGitHub();
-app.listen(PORT, () => console.log(`Wall Family Cookbook running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Wall Family Cookbook running on http://0.0.0.0:${PORT}`));
