@@ -22,6 +22,7 @@
 import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -43,6 +44,144 @@ const SECTION_MAP = {
   breakfast: 'BREAKFAST',
   dessert:   'DESSERTS',
 };
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+const PASSPHRASE     = 'Joe+Linda';
+const COOKIE_NAME    = 'wfc_auth';
+const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
+
+function makeAuthToken(passphrase) {
+  return crypto.createHmac('sha256', 'wfc-2024-salt').update(passphrase).digest('hex');
+}
+
+const VALID_TOKEN = makeAuthToken(PASSPHRASE);
+
+function parseCookies(cookieHeader) {
+  if (!cookieHeader) return {};
+  return Object.fromEntries(
+    cookieHeader.split(';')
+      .map(c => c.trim().split('='))
+      .filter(([k]) => k)
+      .map(([k, ...v]) => [k.trim(), decodeURIComponent(v.join('=').trim())])
+  );
+}
+
+function requireAuth(req, res, next) {
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies[COOKIE_NAME] === VALID_TOKEN) return next();
+  res.status(401).send(buildGatePage());
+}
+
+function buildGatePage(errorMsg = '') {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Wall Family Cookbook</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --red:#8B1A1A; --red-light:#A52828;
+      --cream:#FAF6F0; --tan:#E8DDD0; --tan-dark:#C9B99A;
+      --brown:#5C3A1E; --dark:#2A1A0E; --muted:#8A7060; --white:#FFFFFF;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Lato', sans-serif;
+      background: var(--dark);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .gate-card {
+      background: var(--cream);
+      border-radius: 18px;
+      padding: 3.2rem 2.8rem;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 28px 72px rgba(0,0,0,0.55);
+    }
+    .gate-emoji { font-size: 3.2rem; margin-bottom: 1.3rem; }
+    .gate-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.1rem;
+      font-weight: 900;
+      color: var(--dark);
+      margin-bottom: 0.35rem;
+    }
+    .gate-sub {
+      font-size: 0.87rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 2.2rem;
+    }
+    .gate-input {
+      width: 100%;
+      border: 1.5px solid var(--tan-dark);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      font-size: 1rem;
+      font-family: 'Lato', sans-serif;
+      background: var(--white);
+      color: var(--dark);
+      text-align: center;
+      letter-spacing: 0.06em;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .gate-input:focus { border-color: var(--red); }
+    .gate-btn {
+      display: block;
+      width: 100%;
+      margin-top: 1rem;
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      padding: 0.95rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .gate-btn:hover { background: var(--red-light); }
+    .gate-error {
+      margin-top: 0.9rem;
+      font-size: 0.83rem;
+      color: var(--red);
+      font-style: italic;
+      min-height: 1.3em;
+    }
+    .gate-rule {
+      width: 48px; height: 3px;
+      background: var(--red);
+      margin: 1.4rem auto 1.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="gate-card">
+    <div class="gate-emoji">📖</div>
+    <h1 class="gate-title">Wall Family Cookbook</h1>
+    <div class="gate-rule"></div>
+    <p class="gate-sub">Family recipes, just for us.</p>
+    <form method="POST" action="/api/login">
+      <input class="gate-input" type="password" name="passphrase"
+             placeholder="Enter passphrase" autofocus autocomplete="current-password"/>
+      <button class="gate-btn" type="submit">Enter the Cookbook</button>
+      <p class="gate-error">${errorMsg}</p>
+    </form>
+  </div>
+</body>
+</html>`;
+}
 
 // ── Startup: sync index.html from GitHub ─────────────────────────────────────
 
@@ -72,7 +211,7 @@ async function syncFromGitHub() {
 
 // ── GitHub push ───────────────────────────────────────────────────────────────
 
-async function pushToGitHub(htmlContent, recipeName) {
+async function pushToGitHub(htmlContent, commitMessage) {
   const token = process.env.GITHUB_TOKEN;
   if (!token) throw new Error('GITHUB_TOKEN is not set in Replit Secrets');
 
@@ -83,10 +222,9 @@ async function pushToGitHub(htmlContent, recipeName) {
     'Content-Type': 'application/json',
   };
 
-  // Get current SHA (required for update)
   const getRes = await fetch(GITHUB_API, { headers });
   if (!getRes.ok) {
-    if (getRes.status === 409) throw new Error('Someone else just added a recipe — please try again in a moment');
+    if (getRes.status === 409) throw new Error('Someone else just updated the cookbook — please try again in a moment');
     throw new Error(`GitHub read failed (${getRes.status})`);
   }
   const { sha } = await getRes.json();
@@ -95,16 +233,12 @@ async function pushToGitHub(htmlContent, recipeName) {
   const putRes  = await fetch(GITHUB_API, {
     method: 'PUT',
     headers,
-    body: JSON.stringify({
-      message: `Add recipe: ${recipeName}`,
-      content: encoded,
-      sha,
-    }),
+    body: JSON.stringify({ message: commitMessage || 'Update cookbook', content: encoded, sha }),
   });
 
   if (!putRes.ok) {
     const err = await putRes.json().catch(() => ({}));
-    if (putRes.status === 409) throw new Error('Someone else just added a recipe — please try again in a moment');
+    if (putRes.status === 409) throw new Error('Someone else just updated the cookbook — please try again in a moment');
     throw new Error(err.message || `GitHub push failed (${putRes.status})`);
   }
 }
@@ -152,34 +286,15 @@ function generateUniqueId(existingHtml, baseName) {
   return id;
 }
 
-// ── Gemini prompt builder ─────────────────────────────────────────────────────
+// ── Card HTML template (shared by add and edit prompts) ───────────────────────
 
-function buildPrompt(recipeText, category, authorName, cardId) {
-  return `You are a recipe formatter for a family cookbook website. Convert the recipe below into a single HTML block.
-
-CRITICAL OUTPUT RULES:
-- Output ONLY the raw HTML starting with <div class="flip-card" — nothing else before or after
-- No markdown, no backticks, no explanation, no preamble
-- Use ONLY the exact CSS class names listed in the template
-- Escape HTML entities: use &amp; for &, &lt; for <, &gt; for >
-- If any info is missing, make a reasonable inference — never output "N/A" or "Unknown"
-- The card ID is: ${cardId}
-
-RECIPE INFO:
-Category: ${category}
-Added by: ${authorName}
----
-${recipeText}
----
-
-OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
-
-<div class="flip-card" id="${cardId}" onclick="toggleFlip(this)">
+const CARD_TEMPLATE = (cardId, authorName) => `<div class="flip-card" id="${cardId}" onclick="toggleFlip(this)">
   <div class="flip-card-inner">
 
     <div class="flip-front">
       <div class="front-img">
         [ONE EMOJI REPRESENTING THE DISH]
+        <button class="front-edit-btn" onclick="event.stopPropagation(); openEditModal('${cardId}')" title="Edit recipe">✏️</button>
         <span class="front-badge">[Dish Type · Category]</span>
         <span class="front-hint">↻ Tap to see recipe</span>
       </div>
@@ -250,13 +365,68 @@ OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
         </div>
 
         <p class="b-heading">Chef's Note</p>
-        <p class="b-chefs-note">[One insightful sentence: a pro tip, flavor secret, or key technique that elevates this dish]</p>
+        <p class="b-chefs-note">[One insightful sentence: a pro tip, flavor secret, or key technique]</p>
 
       </div>
     </div>
 
   </div>
-</div>`;
+</div><!-- /flip-card -->`;
+
+// ── Gemini prompt builders ────────────────────────────────────────────────────
+
+function buildPrompt(recipeText, category, authorName, cardId) {
+  return `You are a recipe formatter for a family cookbook website. Convert the recipe below into a single HTML block.
+
+CRITICAL OUTPUT RULES:
+- Output ONLY the raw HTML starting with <div class="flip-card" — nothing else before or after
+- No markdown, no backticks, no explanation, no preamble
+- Use ONLY the exact CSS class names listed in the template
+- Escape HTML entities: use &amp; for &, &lt; for <, &gt; for >
+- If any info is missing, make a reasonable inference — never output "N/A" or "Unknown"
+- The card ID is: ${cardId}
+- The final line must be exactly: </div><!-- /flip-card -->
+
+RECIPE INFO:
+Category: ${category}
+Added by: ${authorName}
+---
+${recipeText}
+---
+
+OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
+
+${CARD_TEMPLATE(cardId, authorName)}`;
+}
+
+function buildEditPrompt(existingCardText, editInstructions, cardId) {
+  // Extract author from text if possible (look for "Added by NAME" pattern)
+  const authorMatch = existingCardText.match(/Added by\s+(\w+)/i);
+  const authorName  = authorMatch ? authorMatch[1] : 'Family';
+
+  return `You are editing a recipe card for a family cookbook website.
+
+EXISTING RECIPE (extracted from the current card):
+---
+${existingCardText}
+---
+
+USER'S EDIT REQUEST:
+"${editInstructions}"
+
+Apply the edit request and output a COMPLETE, regenerated recipe card. Preserve all information not mentioned in the edit request.
+
+CRITICAL OUTPUT RULES:
+- Output ONLY the raw HTML starting with <div class="flip-card" — nothing else before or after
+- No markdown, no backticks, no explanation
+- Use ONLY the exact CSS class names in the template
+- Escape HTML entities: use &amp; for &, &lt; for <, &gt; for >
+- Preserve the card ID exactly: ${cardId}
+- The final line must be exactly: </div><!-- /flip-card -->
+
+OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
+
+${CARD_TEMPLATE(cardId, authorName)}`;
 }
 
 // ── Gemini call ───────────────────────────────────────────────────────────────
@@ -275,7 +445,6 @@ async function generateCardHtml(prompt) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     const result = await model.generateContent(prompt);
     const text   = result.response.text().trim()
-      // Strip accidental markdown fences
       .replace(/^```html\s*/i, '').replace(/\s*```$/, '');
 
     if (text.includes('flip-card') && text.includes('flip-back')) {
@@ -285,12 +454,17 @@ async function generateCardHtml(prompt) {
     if (attempt === 2) throw new Error('AI returned malformed output — please try again');
   }
 
-  // Safety: strip any script tags Gemini might hallucinate
+  // Ensure closing marker is present
+  if (!cardHtml.trimEnd().endsWith('</div><!-- /flip-card -->')) {
+    cardHtml = cardHtml.trimEnd() + '\n</div><!-- /flip-card -->';
+  }
+
+  // Safety: strip any script tags
   cardHtml = cardHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
   return cardHtml;
 }
 
-// ── HTML injection ────────────────────────────────────────────────────────────
+// ── HTML injection (add new card) ─────────────────────────────────────────────
 
 function injectCard(html, category, cardHtml) {
   const sectionKey  = SECTION_MAP[category];
@@ -300,25 +474,22 @@ function injectCard(html, category, cardHtml) {
   const startIdx = html.indexOf(startMarker);
   const endIdx   = html.indexOf(endMarker);
   if (startIdx === -1 || endIdx === -1) {
-    throw new Error(`Section markers missing for: ${sectionKey} — contact Caleb`);
+    throw new Error(`Section markers missing for: ${sectionKey}`);
   }
 
-  const before          = html.slice(0, startIdx + startMarker.length);
-  const existing        = html.slice(startIdx + startMarker.length, endIdx);
-  const after           = html.slice(endIdx);
+  const before   = html.slice(0, startIdx + startMarker.length);
+  const existing = html.slice(startIdx + startMarker.length, endIdx);
+  const after    = html.slice(endIdx);
 
   let newContent;
   if (existing.includes('card-grid')) {
-    // Append inside existing grid
     newContent = existing.replace(/(\s*)<\/div>(\s*)$/, `\n    ${cardHtml}\n  </div>\n  `);
   } else {
-    // First card: create the grid wrapper
     newContent = `\n  <div class="card-grid">\n    ${cardHtml}\n  </div>\n  `;
   }
 
   let updated = before + newContent + after;
 
-  // Update section count
   const currentCount = (existing.match(/class="flip-card"/g) || []).length;
   const newCount     = currentCount + 1;
   const countLabel   = newCount === 1 ? '1 recipe' : `${newCount} recipes`;
@@ -327,7 +498,6 @@ function injectCard(html, category, cardHtml) {
     `$1${countLabel}$2`
   );
 
-  // Hide empty-state if it's the first card
   if (currentCount === 0) {
     updated = updated.replace(
       `<div class="empty-state" id="empty-${sectionKey.toLowerCase()}">`,
@@ -338,17 +508,115 @@ function injectCard(html, category, cardHtml) {
   return updated;
 }
 
+// ── Card extraction and replacement (edit) ────────────────────────────────────
+
+function extractCardHtml(html, cardId) {
+  const startMarker = `<div class="flip-card" id="${cardId}"`;
+  const endMarker   = `</div><!-- /flip-card -->`;
+
+  const startIdx = html.indexOf(startMarker);
+  if (startIdx === -1) throw new Error(`Card not found: ${cardId}`);
+
+  const endIdx = html.indexOf(endMarker, startIdx);
+  if (endIdx === -1) throw new Error(`Card closing marker not found for: ${cardId}`);
+
+  const endPos = endIdx + endMarker.length;
+  return {
+    cardHtml: html.slice(startIdx, endPos),
+    startIdx,
+    endPos,
+  };
+}
+
+function stripCardToText(cardHtml) {
+  return cardHtml
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function replaceCard(html, cardId, newCardHtml) {
+  const { startIdx, endPos } = extractCardHtml(html, cardId);
+  return html.slice(0, startIdx) + newCardHtml + html.slice(endPos);
+}
+
+// ── Recipe catalog builder (for chat) ────────────────────────────────────────
+
+function buildRecipeCatalog(html) {
+  const lines = [];
+  const sections = ['APPETIZERS','ENTREES','SIDES','SNACKS','BREAKFAST','DESSERTS'];
+
+  for (const section of sections) {
+    const startIdx = html.indexOf(`<!-- ${section}_START -->`);
+    const endIdx   = html.indexOf(`<!-- ${section}_END -->`);
+    if (startIdx === -1 || endIdx === -1) continue;
+
+    const sectionHtml = html.slice(startIdx, endIdx);
+    if (!sectionHtml.includes('flip-card')) continue;
+
+    lines.push(`[${section}]`);
+
+    const cardPattern = /class="flip-card"[\s\S]*?<\/div><!-- \/flip-card -->/g;
+    let match;
+    while ((match = cardPattern.exec(sectionHtml)) !== null) {
+      const c       = match[0];
+      const title   = (c.match(/class="front-title">([^<]+)</) || [])[1] || '?';
+      const author  = (c.match(/class="front-author">[^<]*<span>([^<]+)</) || [])[1] || '?';
+      const sub     = (c.match(/class="front-sub">([^<]+)</) || [])[1] || '';
+      const chips   = [...c.matchAll(/class="chip">([^<]+)</g)].map(m => m[1]).join(', ');
+      lines.push(`- ${title} (by ${author}): ${chips}${sub ? ' — ' + sub : ''}`);
+    }
+  }
+
+  return lines.length > 0 ? lines.join('\n') : 'No recipes have been added yet.';
+}
+
 // ── Express app ───────────────────────────────────────────────────────────────
 
 const app = express();
 app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: false }));
+
+// ── Auth routes (unprotected) ─────────────────────────────────────────────────
+
+app.post('/api/login', (req, res) => {
+  const { passphrase } = req.body || {};
+  if (makeAuthToken(passphrase || '') === VALID_TOKEN) {
+    res.setHeader('Set-Cookie',
+      `${COOKIE_NAME}=${VALID_TOKEN}; HttpOnly; SameSite=Strict; Max-Age=${COOKIE_MAX_AGE}; Path=/`
+    );
+    return res.redirect(302, '/');
+  }
+  res.status(401).send(buildGatePage('Incorrect passphrase — try again.'));
+});
+
+app.post('/api/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Max-Age=0; Path=/`);
+  res.redirect(302, '/');
+});
+
+app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+// ── Protected page routes (must come before express.static) ───────────────────
+
+app.get(['/', '/index.html'], requireAuth, (req, res) => {
+  res.sendFile(HTML_PATH);
+});
+
+// ── Static assets (unprotected — only JS/CSS would be here; all assets are inline) ──
+
 app.use(express.static(__dirname));
 
-app.post('/api/add-recipe', async (req, res) => {
+// ── Protected API routes ──────────────────────────────────────────────────────
+
+app.post('/api/add-recipe', requireAuth, async (req, res) => {
   try {
     const { category, authorName, recipeInput } = req.body || {};
 
-    // Validate
     if (!SECTION_MAP[category]) {
       return res.status(400).json({ error: 'Invalid category selected' });
     }
@@ -359,30 +627,21 @@ app.post('/api/add-recipe', async (req, res) => {
       return res.status(400).json({ error: 'Recipe is too short — please paste more detail' });
     }
 
-    // Fetch URL content if input is a link
     let recipeText = recipeInput.trim();
     if (/^https?:\/\/.+/i.test(recipeText)) {
       recipeText = await fetchUrlContent(recipeText);
     }
 
-    // Read current HTML
     const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const firstLine   = recipeText.split('\n')[0].slice(0, 80);
+    const cardId      = generateUniqueId(currentHtml, firstLine);
 
-    // Extract a best-guess recipe name from the first ~100 chars for the card ID
-    const firstLine  = recipeText.split('\n')[0].slice(0, 80);
-    const cardId     = generateUniqueId(currentHtml, firstLine);
-
-    // Generate card HTML via Gemini
-    const prompt  = buildPrompt(recipeText, category, authorName.trim(), cardId);
+    const prompt   = buildPrompt(recipeText, category, authorName.trim(), cardId);
     const cardHtml = await generateCardHtml(prompt);
 
-    // Inject into HTML string
     const updatedHtml = injectCard(currentHtml, category, cardHtml);
 
-    // Push to GitHub first (source of truth)
-    await pushToGitHub(updatedHtml, firstLine);
-
-    // Then write to local disk
+    await pushToGitHub(updatedHtml, `Add recipe: ${firstLine}`);
     await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
 
     res.json({ success: true, cardId });
@@ -393,7 +652,97 @@ app.post('/api/add-recipe', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+app.post('/api/edit-recipe', requireAuth, async (req, res) => {
+  try {
+    const { cardId, editInstructions } = req.body || {};
+
+    if (!cardId || typeof cardId !== 'string' || !/^card-[a-z0-9-]+$/.test(cardId)) {
+      return res.status(400).json({ error: 'Invalid card ID' });
+    }
+    if (!editInstructions || editInstructions.trim().length < 5) {
+      return res.status(400).json({ error: 'Please describe what you want to change (at least 5 characters)' });
+    }
+    if (editInstructions.trim().length > 500) {
+      return res.status(400).json({ error: 'Edit description too long (max 500 characters)' });
+    }
+
+    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const { cardHtml } = extractCardHtml(currentHtml, cardId);
+    const cardText     = stripCardToText(cardHtml);
+
+    const prompt      = buildEditPrompt(cardText, editInstructions.trim(), cardId);
+    const newCardHtml = await generateCardHtml(prompt);
+
+    const updatedHtml = replaceCard(currentHtml, cardId, newCardHtml);
+
+    const titleMatch  = newCardHtml.match(/class="front-title">([^<]+)</);
+    const recipeName  = titleMatch ? titleMatch[1] : cardId;
+
+    await pushToGitHub(updatedHtml, `Edit recipe: ${recipeName}`);
+    await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+
+    res.json({ success: true, cardId });
+
+  } catch (err) {
+    console.error('[edit-recipe]', err);
+    res.status(500).json({ error: err.message || 'Something went wrong — please try again' });
+  }
+});
+
+app.post('/api/chat', requireAuth, async (req, res) => {
+  try {
+    const { message, history } = req.body || {};
+
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    if (message.trim().length > 500) {
+      return res.status(400).json({ error: 'Message too long (max 500 characters)' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not set in Replit Secrets');
+
+    const currentHtml   = await fs.readFile(HTML_PATH, 'utf-8');
+    const recipeCatalog = buildRecipeCatalog(currentHtml);
+
+    const systemPrompt = `You are a helpful, warm cooking assistant for the Wall Family Cookbook — a private family recipe collection.
+
+CURRENT COOKBOOK CONTENTS:
+${recipeCatalog}
+
+Your role:
+- Answer questions about these specific recipes (ingredients, techniques, substitutions, timing, scaling)
+- Help family members decide what to cook based on what's in the cookbook
+- Suggest modifications and troubleshoot cooking problems
+- Be conversational and concise — 2 to 4 sentences unless more detail is genuinely needed
+- If asked about something not in the cookbook, say so warmly and offer related help from what's available
+- Do not invent recipes that aren't in the cookbook`;
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      generationConfig: { temperature: 0.7, maxOutputTokens: 600 },
+      systemInstruction: systemPrompt,
+    });
+
+    // Validate and cap history at last 4 turns (8 messages)
+    const safeHistory = (Array.isArray(history) ? history : [])
+      .slice(-8)
+      .filter(m => m && (m.role === 'user' || m.role === 'model') && typeof m.parts === 'string')
+      .map(m => ({ role: m.role, parts: [{ text: String(m.parts).slice(0, 500) }] }));
+
+    const chat   = model.startChat({ history: safeHistory });
+    const result = await chat.sendMessage(message.trim());
+    const reply  = result.response.text().trim();
+
+    res.json({ reply });
+
+  } catch (err) {
+    console.error('[chat]', err);
+    res.status(500).json({ error: 'Something went wrong — please try again' });
+  }
+});
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 

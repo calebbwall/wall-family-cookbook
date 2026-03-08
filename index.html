@@ -604,6 +604,29 @@
       .b-notes-grid { grid-template-columns: 1fr; }
     }
 
+    /* ── Edit Button (on card front) ─────────────────────── */
+    .front-edit-btn {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      background: rgba(0,0,0,0.3);
+      border: none;
+      color: var(--tan);
+      font-size: 0.75rem;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      transition: background 0.2s;
+      padding: 0;
+      line-height: 1;
+    }
+    .front-edit-btn:hover { background: rgba(0,0,0,0.55); }
+
     /* ── Nav Add Button ───────────────────────────────────── */
     .nav-add-btn {
       background: var(--red);
@@ -724,6 +747,193 @@
       text-align: center;
       font-style: italic;
     }
+
+    /* ── Edit Recipe Modal ────────────────────────────────── */
+    #edit-recipe-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: rgba(42,26,14,0.72);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    #edit-form textarea {
+      width: 100%;
+      border: 1px solid var(--tan-dark);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.9rem;
+      font-family: 'Lato', sans-serif;
+      background: var(--white);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      resize: vertical;
+      min-height: 110px;
+    }
+    #edit-form textarea:focus { border-color: var(--red); }
+    #edit-modal-status {
+      display: none;
+      margin-top: 0.9rem;
+      font-size: 0.85rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* ── Chat FAB ─────────────────────────────────────────── */
+    .chat-fab {
+      position: fixed;
+      bottom: 1.75rem;
+      right: 1.75rem;
+      width: 54px;
+      height: 54px;
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      border-radius: 50%;
+      font-size: 1.4rem;
+      cursor: pointer;
+      z-index: 400;
+      box-shadow: 0 4px 20px rgba(139,26,26,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .chat-fab:hover { background: var(--red-light); transform: scale(1.07); }
+
+    /* ── Chat Panel ───────────────────────────────────────── */
+    .chat-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 380px;
+      height: 100vh;
+      background: var(--dark);
+      z-index: 450;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -4px 0 28px rgba(0,0,0,0.45);
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0.2, 0.2, 1);
+    }
+    .chat-panel.open { transform: translateX(0); }
+    @media (max-width: 600px) { .chat-panel { width: 100%; } }
+
+    .chat-panel-header {
+      background: var(--red);
+      padding: 1rem 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .chat-panel-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--white);
+    }
+    .chat-panel-close {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: var(--white);
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .chat-panel-close:hover { background: rgba(255,255,255,0.3); }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      scrollbar-width: thin;
+      scrollbar-color: var(--red) transparent;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: var(--red); border-radius: 2px; }
+
+    .chat-msg {
+      max-width: 86%;
+      padding: 0.6rem 0.9rem;
+      border-radius: 12px;
+      font-size: 0.83rem;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+    .chat-msg-user {
+      background: var(--red);
+      color: var(--white);
+      align-self: flex-end;
+      border-bottom-right-radius: 3px;
+    }
+    .chat-msg-assistant {
+      background: rgba(255,255,255,0.08);
+      color: var(--tan);
+      align-self: flex-start;
+      border-bottom-left-radius: 3px;
+    }
+    .chat-msg-thinking {
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      align-self: flex-start;
+      font-style: italic;
+      font-size: 0.78rem;
+    }
+
+    .chat-input-row {
+      padding: 0.85rem;
+      display: flex;
+      gap: 0.5rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+    .chat-input {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 0.6rem 0.85rem;
+      color: var(--white);
+      font-size: 0.85rem;
+      font-family: 'Lato', sans-serif;
+      outline: none;
+      resize: none;
+      min-height: 38px;
+      max-height: 100px;
+      transition: border-color 0.15s;
+    }
+    .chat-input::placeholder { color: var(--muted); }
+    .chat-input:focus { border-color: var(--red); }
+    .chat-send-btn {
+      background: var(--red);
+      border: none;
+      color: var(--white);
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .chat-send-btn:hover:not(:disabled) { background: var(--red-light); }
+    .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -870,6 +1080,7 @@
         <div class="flip-front">
           <div class="front-img">
             🍪
+            <button class="front-edit-btn" onclick="event.stopPropagation(); openEditModal('card-hbc')" title="Edit recipe">✏️</button>
             <span class="front-badge">Cookies · Dessert</span>
             <span class="front-hint">↻ Tap to see recipe</span>
           </div>
@@ -1013,6 +1224,7 @@
         <div class="flip-front">
           <div class="front-img">
             🍌
+            <button class="front-edit-btn" onclick="event.stopPropagation(); openEditModal('card-bb')" title="Edit recipe">✏️</button>
             <span class="front-badge">Quick Bread · Dessert</span>
             <span class="front-hint">↻ Tap to see recipe</span>
           </div>
@@ -1111,6 +1323,7 @@
         <div class="flip-front">
           <div class="front-img">
             🫐
+            <button class="front-edit-btn" onclick="event.stopPropagation(); openEditModal('card-lbdb')" title="Edit recipe">✏️</button>
             <span class="front-badge">Dutch Baby · Dessert</span>
             <span class="front-hint">↻ Tap to see recipe</span>
           </div>
@@ -1213,6 +1426,23 @@
   Hit <strong style="font-family:Lato,sans-serif;font-size:0.82rem;color:var(--tan-dark);display:inline">+ Add Recipe</strong> to share yours.
 </footer>
 
+<!-- Edit Recipe Modal -->
+<div id="edit-recipe-modal" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeEditModal()" title="Close">✕</button>
+    <h2 class="modal-title">Edit Recipe</h2>
+    <p class="modal-sub">Describe what to change — AI will regenerate the card.</p>
+    <input type="hidden" id="edit-card-id" value="">
+    <form id="edit-form" onsubmit="submitEdit(event)">
+      <label class="modal-label" for="edit-instructions">What to Change</label>
+      <textarea id="edit-instructions" rows="4" maxlength="500" required
+        placeholder="e.g. Change the baking temp to 375°F and add a note about using orange blossom honey…"></textarea>
+      <button type="submit" class="modal-submit" id="edit-submit-btn">Update Recipe</button>
+      <p id="edit-modal-status"></p>
+    </form>
+  </div>
+</div>
+
 <!-- Add Recipe Modal -->
 <div id="add-recipe-modal" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal-box">
@@ -1246,33 +1476,55 @@
   </div>
 </div>
 
+<!-- Chat FAB -->
+<button class="chat-fab" onclick="toggleChat()" title="Chat about recipes" aria-label="Open recipe chat">💬</button>
+
+<!-- Chat Panel -->
+<div class="chat-panel" id="chat-panel" role="complementary" aria-label="Recipe chat">
+  <div class="chat-panel-header">
+    <span class="chat-panel-title">📖 Recipe Assistant</span>
+    <button class="chat-panel-close" onclick="toggleChat()" title="Close">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg chat-msg-assistant">
+      Hi! Ask me anything about our cookbook — what to make tonight, substitutions, techniques, or any recipe questions.
+    </div>
+  </div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chat-input" placeholder="Ask about a recipe…" rows="1" maxlength="500"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+    <button class="chat-send-btn" id="chat-send-btn" onclick="sendChat()" title="Send">➤</button>
+  </div>
+</div>
+
 <script>
+  // ── Flip cards ──────────────────────────────────────────
   function toggleFlip(cardEl) {
     cardEl.classList.toggle('flipped');
   }
 
+  // ── Add Recipe ──────────────────────────────────────────
   async function submitRecipe(event) {
     event.preventDefault();
-    const form = event.target;
-    const btn  = document.getElementById('submit-btn');
+    const form   = event.target;
+    const btn    = document.getElementById('submit-btn');
     const status = document.getElementById('modal-status');
 
-    btn.disabled = true;
+    btn.disabled    = true;
     btn.textContent = 'Formatting with AI…';
     status.style.display = 'none';
-    status.textContent = '';
-
-    const body = {
-      category:    form.category.value,
-      authorName:  form.authorName.value.trim(),
-      recipeInput: form.recipeInput.value.trim(),
-    };
+    status.textContent   = '';
 
     try {
       const res  = await fetch('/api/add-recipe', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
+        body:    JSON.stringify({
+          category:    form.category.value,
+          authorName:  form.authorName.value.trim(),
+          recipeInput: form.recipeInput.value.trim(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Something went wrong');
@@ -1288,6 +1540,117 @@
       status.textContent   = err.message;
       btn.disabled    = false;
       btn.textContent = 'Add to Cookbook';
+    }
+  }
+
+  // ── Edit Recipe ─────────────────────────────────────────
+  function openEditModal(cardId) {
+    document.getElementById('edit-card-id').value          = cardId;
+    document.getElementById('edit-instructions').value     = '';
+    document.getElementById('edit-modal-status').style.display = 'none';
+    document.getElementById('edit-submit-btn').disabled    = false;
+    document.getElementById('edit-submit-btn').textContent = 'Update Recipe';
+    document.getElementById('edit-recipe-modal').style.display = 'flex';
+    document.getElementById('edit-instructions').focus();
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-recipe-modal').style.display = 'none';
+  }
+
+  async function submitEdit(event) {
+    event.preventDefault();
+    const cardId       = document.getElementById('edit-card-id').value;
+    const instructions = document.getElementById('edit-instructions').value.trim();
+    const btn          = document.getElementById('edit-submit-btn');
+    const status       = document.getElementById('edit-modal-status');
+
+    btn.disabled    = true;
+    btn.textContent = 'Updating with AI…';
+    status.style.display = 'none';
+
+    try {
+      const res  = await fetch('/api/edit-recipe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ cardId, editInstructions: instructions }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
+
+      status.style.display = 'block';
+      status.style.color   = '#2a7a2a';
+      status.textContent   = '✓ Recipe updated! Refreshing…';
+      setTimeout(() => window.location.reload(), 2000);
+
+    } catch (err) {
+      status.style.display = 'block';
+      status.style.color   = 'var(--red)';
+      status.textContent   = err.message;
+      btn.disabled    = false;
+      btn.textContent = 'Update Recipe';
+    }
+  }
+
+  // ── Chat ────────────────────────────────────────────────
+  let chatHistory = [];
+  let chatOpen    = false;
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+    const panel = document.getElementById('chat-panel');
+    panel.classList.toggle('open', chatOpen);
+    if (chatOpen) document.getElementById('chat-input').focus();
+  }
+
+  function appendChatMessage(role, text) {
+    const messages = document.getElementById('chat-messages');
+    const div      = document.createElement('div');
+    div.className  = 'chat-msg chat-msg-' + (role === 'user' ? 'user' : 'assistant');
+    div.textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+
+  async function sendChat() {
+    const input   = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('chat-send-btn');
+    const message = input.value.trim();
+    if (!message || sendBtn.disabled) return;
+
+    appendChatMessage('user', message);
+    input.value        = '';
+    input.style.height = 'auto';
+    sendBtn.disabled   = true;
+
+    const thinking     = document.createElement('div');
+    thinking.className = 'chat-msg chat-msg-thinking';
+    thinking.textContent = 'Thinking…';
+    document.getElementById('chat-messages').appendChild(thinking);
+    document.getElementById('chat-messages').scrollTop = 99999;
+
+    try {
+      const res  = await fetch('/api/chat', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ message, history: chatHistory }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
+
+      thinking.remove();
+      chatHistory.push({ role: 'user',  parts: message });
+      chatHistory.push({ role: 'model', parts: data.reply });
+      if (chatHistory.length > 8) chatHistory = chatHistory.slice(-8);
+      appendChatMessage('assistant', data.reply);
+
+    } catch (err) {
+      thinking.remove();
+      appendChatMessage('assistant', 'Sorry, something went wrong — please try again.');
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
     }
   }
 </script>
