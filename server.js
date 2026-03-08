@@ -33,6 +33,8 @@ const PORT       = process.env.PORT || 5000;
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
+let cachedHtml = null;
+
 async function ensureDbTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS cookbook_html (
@@ -49,7 +51,8 @@ async function loadHtmlFromDb() {
     await ensureDbTable();
     const result = await pool.query('SELECT content FROM cookbook_html WHERE id = 1');
     if (result.rows.length > 0) {
-      await fs.writeFile(HTML_PATH, result.rows[0].content, 'utf-8');
+      cachedHtml = result.rows[0].content;
+      try { await fs.writeFile(HTML_PATH, cachedHtml, 'utf-8'); } catch (_) {}
       console.log('[startup] Loaded index.html from database');
       return true;
     }
@@ -60,6 +63,7 @@ async function loadHtmlFromDb() {
 }
 
 async function saveHtmlToDb(htmlContent) {
+  cachedHtml = htmlContent;
   try {
     await pool.query(
       `INSERT INTO cookbook_html (id, content, updated_at) VALUES (1, $1, NOW())
@@ -69,6 +73,18 @@ async function saveHtmlToDb(htmlContent) {
   } catch (err) {
     console.error('[db] Failed to save HTML to database:', err.message);
   }
+}
+
+async function getCurrentHtml() {
+  if (cachedHtml) return cachedHtml;
+  try {
+    const result = await pool.query('SELECT content FROM cookbook_html WHERE id = 1');
+    if (result.rows.length > 0) {
+      cachedHtml = result.rows[0].content;
+      return cachedHtml;
+    }
+  } catch (_) {}
+  return await fs.readFile(HTML_PATH, 'utf-8');
 }
 
 const SECTION_MAP = {
@@ -709,8 +725,9 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Protected page routes (must come before express.static) ───────────────────
 
-app.get(['/', '/index.html'], requireAuth, (req, res) => {
-  res.sendFile(HTML_PATH);
+app.get(['/', '/index.html'], requireAuth, async (req, res) => {
+  const html = await getCurrentHtml();
+  res.type('html').send(html);
 });
 
 // ── Static assets (unprotected — only JS/CSS would be here; all assets are inline) ──
@@ -745,7 +762,7 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
       }
     }
 
-    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const currentHtml = await getCurrentHtml();
     const firstLine   = isUrl ? recipeText.split('\n')[0].slice(0, 80) : recipeText.split('\n')[0].slice(0, 80);
     const cardId      = generateUniqueId(currentHtml, firstLine);
 
@@ -760,7 +777,7 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
 
     const updatedHtml = injectCard(currentHtml, category, cardHtml);
 
-    await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
     await saveHtmlToDb(updatedHtml);
 
     res.json({ success: true, cardId });
@@ -785,7 +802,7 @@ app.post('/api/edit-recipe', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Edit description too long (max 500 characters)' });
     }
 
-    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const currentHtml = await getCurrentHtml();
     const { cardHtml } = extractCardHtml(currentHtml, cardId);
     const cardText     = stripCardToText(cardHtml);
 
@@ -797,7 +814,7 @@ app.post('/api/edit-recipe', requireAuth, async (req, res) => {
     const titleMatch  = newCardHtml.match(/class="front-title">([^<]+)</);
     const recipeName  = titleMatch ? titleMatch[1] : cardId;
 
-    await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
     await saveHtmlToDb(updatedHtml);
 
     res.json({ success: true, cardId });
@@ -814,7 +831,7 @@ app.get('/api/get-card-html', requireAuth, async (req, res) => {
     if (!cardId || !/^card-[a-z0-9-]+$/.test(cardId)) {
       return res.status(400).json({ error: 'Invalid card ID' });
     }
-    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const currentHtml = await getCurrentHtml();
     const { cardHtml } = extractCardHtml(currentHtml, cardId);
     res.json({ cardHtml });
   } catch (err) {
@@ -841,10 +858,10 @@ app.post('/api/save-card-html', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'HTML contains forbidden elements (scripts, iframes, etc). Please remove them.' });
     }
 
-    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const currentHtml = await getCurrentHtml();
     const updatedHtml = replaceCard(currentHtml, cardId, sanitized);
 
-    await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
     await saveHtmlToDb(updatedHtml);
 
     res.json({ success: true, cardId });
@@ -861,11 +878,11 @@ app.post('/api/delete-recipe', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid card ID' });
     }
 
-    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const currentHtml = await getCurrentHtml();
     const { startIdx, endPos } = extractCardHtml(currentHtml, cardId);
     const updatedHtml = currentHtml.slice(0, startIdx) + currentHtml.slice(endPos);
 
-    await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
     await saveHtmlToDb(updatedHtml);
 
     res.json({ success: true });
@@ -889,7 +906,7 @@ app.post('/api/chat', requireAuth, async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set in Replit Secrets');
 
-    const currentHtml   = await fs.readFile(HTML_PATH, 'utf-8');
+    const currentHtml   = await getCurrentHtml();
     const recipeCatalog = buildRecipeCatalog(currentHtml);
 
     const systemPrompt = `You are a helpful, warm cooking assistant for the Wall Family Cookbook — a private family recipe collection.
