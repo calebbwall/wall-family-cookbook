@@ -247,22 +247,63 @@ async function pushToGitHub(htmlContent, commitMessage) {
 
 async function fetchUrlContent(url) {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WallFamilyCookbook/1.0)' },
-    signal: AbortSignal.timeout(10000),
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    signal: AbortSignal.timeout(15000),
+    redirect: 'follow',
   });
-  if (!res.ok) throw new Error(`URL fetch failed (${res.status}) — try pasting the recipe text directly`);
+  if (!res.ok) throw new Error(`That website blocked the request (${res.status}). Copy the recipe text from the page and paste it here instead.`);
 
   const html = await res.text();
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 10000);
+
+  let text = '';
+  const jsonLdMatch = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+  if (jsonLdMatch) {
+    for (const block of jsonLdMatch) {
+      const inner = block.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '').trim();
+      try {
+        const parsed = JSON.parse(inner);
+        const items = Array.isArray(parsed) ? parsed : parsed['@graph'] || [parsed];
+        for (const item of items) {
+          if (item['@type'] === 'Recipe' || (Array.isArray(item['@type']) && item['@type'].includes('Recipe'))) {
+            const parts = [item.name || ''];
+            if (item.description) parts.push(item.description);
+            if (Array.isArray(item.recipeIngredient)) parts.push('Ingredients:', ...item.recipeIngredient);
+            if (Array.isArray(item.recipeInstructions)) {
+              parts.push('Instructions:');
+              for (const step of item.recipeInstructions) {
+                parts.push(typeof step === 'string' ? step : step.text || step.name || '');
+              }
+            }
+            if (item.recipeYield) parts.push('Yield: ' + (Array.isArray(item.recipeYield) ? item.recipeYield.join(', ') : item.recipeYield));
+            if (item.prepTime) parts.push('Prep: ' + item.prepTime);
+            if (item.cookTime) parts.push('Cook: ' + item.cookTime);
+            text = parts.filter(Boolean).join('\n');
+            break;
+          }
+        }
+      } catch { /* not valid JSON, skip */ }
+      if (text) break;
+    }
+  }
+
+  if (!text || text.length < 80) {
+    text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  text = text.slice(0, 12000);
 
   if (text.length < 80) {
-    throw new Error("That URL doesn't have readable recipe text — please paste the recipe directly");
+    throw new Error("That URL doesn't have readable recipe text — try pasting the recipe directly");
   }
   return text;
 }
