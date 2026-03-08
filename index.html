@@ -603,6 +603,127 @@
       .flip-card { height: 520px; }
       .b-notes-grid { grid-template-columns: 1fr; }
     }
+
+    /* ── Nav Add Button ───────────────────────────────────── */
+    .nav-add-btn {
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      padding: 0.42rem 1.1rem;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .nav-add-btn:hover { background: var(--red-light); }
+
+    /* ── Add Recipe Modal ─────────────────────────────────── */
+    #add-recipe-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: rgba(42,26,14,0.72);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-box {
+      background: var(--cream);
+      border-radius: 14px;
+      padding: 2rem 2.2rem 2.4rem;
+      max-width: 540px;
+      width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+    }
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1.1rem;
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      color: var(--muted);
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--dark); }
+    .modal-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.9rem;
+      font-weight: 900;
+      color: var(--dark);
+      margin-bottom: 0.3rem;
+    }
+    .modal-sub {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 1.6rem;
+    }
+    .modal-label {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brown);
+      margin: 1.1rem 0 0.4rem;
+    }
+    .modal-label:first-of-type { margin-top: 0; }
+    #recipe-form select,
+    #recipe-form input[type="text"],
+    #recipe-form textarea {
+      width: 100%;
+      border: 1px solid var(--tan-dark);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.9rem;
+      font-family: 'Lato', sans-serif;
+      background: var(--white);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #recipe-form select:focus,
+    #recipe-form input[type="text"]:focus,
+    #recipe-form textarea:focus {
+      border-color: var(--red);
+    }
+    #recipe-form textarea { resize: vertical; min-height: 140px; }
+    .modal-submit {
+      display: block;
+      width: 100%;
+      margin-top: 1.6rem;
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      padding: 0.9rem;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .modal-submit:hover:not(:disabled) { background: var(--red-light); }
+    .modal-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    #modal-status {
+      display: none;
+      margin-top: 0.9rem;
+      font-size: 0.85rem;
+      text-align: center;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -615,8 +736,10 @@
     <li><a href="#entrees">Entrées</a></li>
     <li><a href="#sides">Sides</a></li>
     <li><a href="#snacks">Snacks</a></li>
+    <li><a href="#breakfast">Breakfast</a></li>
     <li><a href="#desserts">Desserts</a></li>
   </ul>
+  <button class="nav-add-btn" onclick="document.getElementById('add-recipe-modal').style.display='flex'">+ Add Recipe</button>
 </nav>
 
 <!-- Hero -->
@@ -637,6 +760,7 @@
       <a href="#entrees"    class="pill">Entrées</a>
       <a href="#sides"      class="pill">Sides</a>
       <a href="#snacks"     class="pill">Snacks</a>
+      <a href="#breakfast"  class="pill">Breakfast</a>
       <a href="#desserts"   class="pill">Desserts</a>
     </div>
   </div>
@@ -647,9 +771,11 @@
   <div class="section-header">
     <span class="section-icon">🥗</span>
     <h2 class="section-title">Appetizers</h2>
-    <span class="section-count">0 recipes</span>
+    <span class="section-count" id="count-appetizers">0 recipes</span>
   </div>
-  <div class="empty-state">
+  <!-- APPETIZERS_START -->
+  <!-- APPETIZERS_END -->
+  <div class="empty-state" id="empty-appetizers">
     <div class="empty-emoji">🥗</div>
     <p class="empty-title">No appetizers yet</p>
     <p class="empty-sub">Wall family starters coming soon.</p>
@@ -662,9 +788,11 @@
   <div class="section-header">
     <span class="section-icon">🍽️</span>
     <h2 class="section-title">Entrées</h2>
-    <span class="section-count">0 recipes</span>
+    <span class="section-count" id="count-entrees">0 recipes</span>
   </div>
-  <div class="empty-state">
+  <!-- ENTREES_START -->
+  <!-- ENTREES_END -->
+  <div class="empty-state" id="empty-entrees">
     <div class="empty-emoji">🍽️</div>
     <p class="empty-title">No entrées yet</p>
     <p class="empty-sub">Main courses coming soon.</p>
@@ -677,9 +805,11 @@
   <div class="section-header">
     <span class="section-icon">🥦</span>
     <h2 class="section-title">Sides</h2>
-    <span class="section-count">0 recipes</span>
+    <span class="section-count" id="count-sides">0 recipes</span>
   </div>
-  <div class="empty-state">
+  <!-- SIDES_START -->
+  <!-- SIDES_END -->
+  <div class="empty-state" id="empty-sides">
     <div class="empty-emoji">🥦</div>
     <p class="empty-title">No sides yet</p>
     <p class="empty-sub">Side dishes coming soon.</p>
@@ -692,12 +822,31 @@
   <div class="section-header">
     <span class="section-icon">🍿</span>
     <h2 class="section-title">Snacks</h2>
-    <span class="section-count">0 recipes</span>
+    <span class="section-count" id="count-snacks">0 recipes</span>
   </div>
-  <div class="empty-state">
+  <!-- SNACKS_START -->
+  <!-- SNACKS_END -->
+  <div class="empty-state" id="empty-snacks">
     <div class="empty-emoji">🍿</div>
     <p class="empty-title">No snacks yet</p>
     <p class="empty-sub">Snack recipes coming soon.</p>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Breakfast -->
+<section id="breakfast" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍳</span>
+    <h2 class="section-title">Breakfast</h2>
+    <span class="section-count" id="count-breakfast">0 recipes</span>
+  </div>
+  <!-- BREAKFAST_START -->
+  <!-- BREAKFAST_END -->
+  <div class="empty-state" id="empty-breakfast">
+    <div class="empty-emoji">🍳</div>
+    <p class="empty-title">No breakfast recipes yet</p>
+    <p class="empty-sub">Morning favorites coming soon.</p>
   </div>
 </section>
 <div class="section-divider"></div>
@@ -707,9 +856,10 @@
   <div class="section-header">
     <span class="section-icon">🍪</span>
     <h2 class="section-title">Desserts</h2>
-    <span class="section-count">3 recipes</span>
+    <span class="section-count" id="count-desserts">3 recipes</span>
   </div>
 
+  <!-- DESSERTS_START -->
   <div class="card-grid">
 
     <!-- Honey Butter Cookies flip card -->
@@ -1053,23 +1203,92 @@
     </div><!-- /flip-card -->
 
   </div><!-- /card-grid -->
+  <!-- DESSERTS_END -->
 </section>
 
 <!-- Footer -->
 <footer>
   <strong>Wall Family Cookbook</strong>
   Recipes passed down, cooked with love, and always improving.<br>
-  Add a new recipe anytime — just ask.
+  Hit <strong style="font-family:Lato,sans-serif;font-size:0.82rem;color:var(--tan-dark);display:inline">+ Add Recipe</strong> to share yours.
 </footer>
 
+<!-- Add Recipe Modal -->
+<div id="add-recipe-modal" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('add-recipe-modal').style.display='none'" title="Close">✕</button>
+    <h2 class="modal-title">Add a Recipe</h2>
+    <p class="modal-sub">Paste recipe text or a link — AI handles the formatting.</p>
+
+    <form id="recipe-form" onsubmit="submitRecipe(event)">
+      <label class="modal-label" for="recipe-category">Category</label>
+      <select id="recipe-category" name="category" required>
+        <option value="">Choose a category…</option>
+        <option value="appetizer">Appetizer</option>
+        <option value="entree">Entrée / Lunch</option>
+        <option value="side">Side Dish</option>
+        <option value="snack">Snack</option>
+        <option value="breakfast">Breakfast</option>
+        <option value="dessert">Dessert</option>
+      </select>
+
+      <label class="modal-label" for="recipe-author">Your Name</label>
+      <input type="text" id="recipe-author" name="authorName" placeholder="e.g. Caleb" required maxlength="40" autocomplete="off" />
+
+      <label class="modal-label" for="recipe-input">Recipe</label>
+      <textarea id="recipe-input" name="recipeInput" rows="9"
+        placeholder="Paste the full recipe here, or paste a URL to a recipe page…"
+        required maxlength="12000"></textarea>
+
+      <button type="submit" class="modal-submit" id="submit-btn">Add to Cookbook</button>
+      <p id="modal-status"></p>
+    </form>
+  </div>
+</div>
+
 <script>
-  /**
-   * toggleFlip — adds/removes the "flipped" class on the .flip-card element.
-   * The CSS perspective + rotateY(180deg) transition does the rest.
-   * No libraries needed — it's pure CSS 3D transforms triggered by a class change.
-   */
   function toggleFlip(cardEl) {
     cardEl.classList.toggle('flipped');
+  }
+
+  async function submitRecipe(event) {
+    event.preventDefault();
+    const form = event.target;
+    const btn  = document.getElementById('submit-btn');
+    const status = document.getElementById('modal-status');
+
+    btn.disabled = true;
+    btn.textContent = 'Formatting with AI…';
+    status.style.display = 'none';
+    status.textContent = '';
+
+    const body = {
+      category:    form.category.value,
+      authorName:  form.authorName.value.trim(),
+      recipeInput: form.recipeInput.value.trim(),
+    };
+
+    try {
+      const res  = await fetch('/api/add-recipe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
+
+      status.style.display = 'block';
+      status.style.color   = '#2a7a2a';
+      status.textContent   = '✓ Recipe added! Refreshing page…';
+      setTimeout(() => window.location.reload(), 2000);
+
+    } catch (err) {
+      status.style.display = 'block';
+      status.style.color   = 'var(--red)';
+      status.textContent   = err.message;
+      btn.disabled    = false;
+      btn.textContent = 'Add to Cookbook';
+    }
   }
 </script>
 
