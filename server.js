@@ -25,15 +25,51 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import pg from 'pg';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HTML_PATH  = path.join(__dirname, 'index.html');
 const PORT       = process.env.PORT || 5000;
 
-const GITHUB_OWNER = process.env.GITHUB_OWNER || 'calebbwall';
-const GITHUB_REPO  = process.env.GITHUB_REPO  || 'wall-family-cookbook';
-const GITHUB_FILE  = 'index.html';
-const GITHUB_API   = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`;
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+async function ensureDbTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cookbook_html (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      content TEXT NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW(),
+      CONSTRAINT single_row CHECK (id = 1)
+    )
+  `);
+}
+
+async function loadHtmlFromDb() {
+  try {
+    await ensureDbTable();
+    const result = await pool.query('SELECT content FROM cookbook_html WHERE id = 1');
+    if (result.rows.length > 0) {
+      await fs.writeFile(HTML_PATH, result.rows[0].content, 'utf-8');
+      console.log('[startup] Loaded index.html from database');
+      return true;
+    }
+  } catch (err) {
+    console.warn('[startup] Database load failed:', err.message);
+  }
+  return false;
+}
+
+async function saveHtmlToDb(htmlContent) {
+  try {
+    await pool.query(
+      `INSERT INTO cookbook_html (id, content, updated_at) VALUES (1, $1, NOW())
+       ON CONFLICT (id) DO UPDATE SET content = $1, updated_at = NOW()`,
+      [htmlContent]
+    );
+  } catch (err) {
+    console.error('[db] Failed to save HTML to database:', err.message);
+  }
+}
 
 const SECTION_MAP = {
   appetizer: 'APPETIZERS',
@@ -725,6 +761,7 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
     const updatedHtml = injectCard(currentHtml, category, cardHtml);
 
     await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    await saveHtmlToDb(updatedHtml);
 
     res.json({ success: true, cardId });
 
@@ -761,6 +798,7 @@ app.post('/api/edit-recipe', requireAuth, async (req, res) => {
     const recipeName  = titleMatch ? titleMatch[1] : cardId;
 
     await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    await saveHtmlToDb(updatedHtml);
 
     res.json({ success: true, cardId });
 
@@ -827,4 +865,12 @@ Your role:
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Wall Family Cookbook running on http://0.0.0.0:${PORT}`));
+(async () => {
+  const loaded = await loadHtmlFromDb();
+  if (!loaded) {
+    const localHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    await saveHtmlToDb(localHtml);
+    console.log('[startup] Seeded database from local index.html');
+  }
+  app.listen(PORT, '0.0.0.0', () => console.log(`Wall Family Cookbook running on http://0.0.0.0:${PORT}`));
+})();

@@ -8,26 +8,31 @@ A family recipe website with AI-powered features for adding, editing, and chatti
 - **Entry point**: `server.js`
 - **Frontend**: `index.html` (embedded CSS/JS, Google Fonts: Playfair Display, Lato)
 - **AI**: Google Gemini 2.5 Flash via `@google/generative-ai`
-- **Storage**: Recipes stored directly in `index.html`, synced to GitHub repo on changes
+- **Storage**: Recipes stored in `index.html`; persisted to PostgreSQL database so they survive deploys
 - **Auth**: Cookie-based passphrase gate (password: "Joe+Linda")
 
 ## Key Features
 - Password-protected landing page
 - Recipe flip cards with front (preview) and back (full recipe)
 - AI-powered recipe adding (paste text or URL, AI formats into card HTML)
+- URL recipe importing via Gemini Google Search grounding (bypasses blocked sites)
 - AI-powered recipe editing (describe changes, AI regenerates card)
 - AI recipe chat assistant (ask about recipes, substitutions, techniques)
-- GitHub sync (pulls latest on startup, pushes on recipe changes)
+- Database persistence (recipes survive restarts and redeploys)
 
 ## Dependencies
 - `express` - Web server
 - `@google/generative-ai` - Gemini AI SDK
+- `pg` - PostgreSQL client for recipe persistence
 
 ## Required Secrets
 - `GEMINI_API_KEY` - Google Gemini API key
-- `GITHUB_TOKEN` - GitHub personal access token (for syncing recipes)
-- `GITHUB_OWNER` - GitHub repo owner (default: calebbwall)
-- `GITHUB_REPO` - GitHub repo name (default: wall-family-cookbook)
+- `DATABASE_URL` - PostgreSQL connection string (auto-provisioned by Replit)
+
+## Database
+- Table `cookbook_html`: single-row table storing the full `index.html` content
+- On startup: loads HTML from database (or seeds from local file if empty)
+- On recipe add/edit: saves updated HTML to both file and database
 
 ## Running the App
 ```
