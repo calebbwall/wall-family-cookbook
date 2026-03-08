@@ -808,6 +808,73 @@ app.post('/api/edit-recipe', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/get-card-html', requireAuth, async (req, res) => {
+  try {
+    const cardId = req.query.cardId;
+    if (!cardId || !/^card-[a-z0-9-]+$/.test(cardId)) {
+      return res.status(400).json({ error: 'Invalid card ID' });
+    }
+    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const { cardHtml } = extractCardHtml(currentHtml, cardId);
+    res.json({ cardHtml });
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+app.post('/api/save-card-html', requireAuth, async (req, res) => {
+  try {
+    const { cardId, cardHtml } = req.body || {};
+    if (!cardId || !/^card-[a-z0-9-]+$/.test(cardId)) {
+      return res.status(400).json({ error: 'Invalid card ID' });
+    }
+    if (!cardHtml || cardHtml.trim().length < 50) {
+      return res.status(400).json({ error: 'Card HTML is too short' });
+    }
+    if (!cardHtml.includes('flip-card') || !cardHtml.includes('flip-front')) {
+      return res.status(400).json({ error: 'Invalid card HTML structure' });
+    }
+
+    let sanitized = cardHtml.trim();
+    const forbidden = /<script[\s\S]*?<\/script>|<iframe|<object|<embed|<link\s|<meta\s|javascript:/gi;
+    if (forbidden.test(sanitized)) {
+      return res.status(400).json({ error: 'HTML contains forbidden elements (scripts, iframes, etc). Please remove them.' });
+    }
+
+    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const updatedHtml = replaceCard(currentHtml, cardId, sanitized);
+
+    await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    await saveHtmlToDb(updatedHtml);
+
+    res.json({ success: true, cardId });
+  } catch (err) {
+    console.error('[save-card-html]', err);
+    res.status(500).json({ error: err.message || 'Something went wrong' });
+  }
+});
+
+app.post('/api/delete-recipe', requireAuth, async (req, res) => {
+  try {
+    const { cardId } = req.body || {};
+    if (!cardId || !/^card-[a-z0-9-]+$/.test(cardId)) {
+      return res.status(400).json({ error: 'Invalid card ID' });
+    }
+
+    const currentHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    const { startIdx, endPos } = extractCardHtml(currentHtml, cardId);
+    const updatedHtml = currentHtml.slice(0, startIdx) + currentHtml.slice(endPos);
+
+    await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8');
+    await saveHtmlToDb(updatedHtml);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[delete-recipe]', err);
+    res.status(500).json({ error: err.message || 'Something went wrong' });
+  }
+});
+
 app.post('/api/chat', requireAuth, async (req, res) => {
   try {
     const { message, history } = req.body || {};

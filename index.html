@@ -759,7 +759,40 @@
       justify-content: center;
       padding: 1rem;
     }
-    #edit-form textarea {
+    .edit-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 1.2rem;
+      border-bottom: 2px solid var(--tan-dark);
+    }
+    .edit-tab {
+      flex: 1;
+      padding: 0.6rem 0.5rem;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      font-family: 'Playfair Display', serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--brown);
+      cursor: pointer;
+      opacity: 0.55;
+      transition: all 0.2s;
+    }
+    .edit-tab:hover { opacity: 0.8; }
+    .edit-tab.active {
+      opacity: 1;
+      border-bottom-color: var(--red);
+      color: var(--red);
+    }
+    .edit-tab-delete.active {
+      border-bottom-color: #b91c1c;
+      color: #b91c1c;
+    }
+    .edit-pane { display: none; }
+    .edit-pane.active { display: block; }
+    #edit-recipe-modal textarea {
       width: 100%;
       border: 1px solid var(--tan-dark);
       border-radius: 6px;
@@ -773,7 +806,47 @@
       resize: vertical;
       min-height: 110px;
     }
-    #edit-form textarea:focus { border-color: var(--red); }
+    #edit-recipe-modal textarea:focus { border-color: var(--red); }
+    #direct-edit-html {
+      min-height: 250px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      white-space: pre;
+      tab-size: 2;
+    }
+    .delete-warning {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 1.2rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .delete-warning p {
+      color: #991b1b;
+      font-size: 0.9rem;
+      margin: 0 0 0.3rem 0;
+    }
+    .delete-warning .delete-recipe-name {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #7f1d1d;
+    }
+    .delete-confirm-btn {
+      background: #b91c1c;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 0.7rem 1.8rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      width: 100%;
+    }
+    .delete-confirm-btn:hover { background: #991b1b; }
+    .delete-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     #edit-modal-status {
       display: none;
       margin-top: 0.9rem;
@@ -1431,15 +1504,44 @@
   <div class="modal-box">
     <button class="modal-close" onclick="closeEditModal()" title="Close">✕</button>
     <h2 class="modal-title">Edit Recipe</h2>
-    <p class="modal-sub">Describe what to change — AI will regenerate the card.</p>
     <input type="hidden" id="edit-card-id" value="">
-    <form id="edit-form" onsubmit="submitEdit(event)">
-      <label class="modal-label" for="edit-instructions">What to Change</label>
-      <textarea id="edit-instructions" rows="4" maxlength="500" required
-        placeholder="e.g. Change the baking temp to 375°F and add a note about using orange blossom honey…"></textarea>
-      <button type="submit" class="modal-submit" id="edit-submit-btn">Update Recipe</button>
-      <p id="edit-modal-status"></p>
-    </form>
+
+    <div class="edit-tabs">
+      <button class="edit-tab active" onclick="switchEditTab('ai')" data-tab="ai">AI Edit</button>
+      <button class="edit-tab" onclick="switchEditTab('direct')" data-tab="direct">Direct Edit</button>
+      <button class="edit-tab edit-tab-delete" onclick="switchEditTab('delete')" data-tab="delete">Delete</button>
+    </div>
+
+    <div id="edit-pane-ai" class="edit-pane active">
+      <p class="modal-sub">Describe what to change — AI will regenerate the card.</p>
+      <form onsubmit="submitAiEdit(event)">
+        <label class="modal-label" for="edit-instructions">What to Change</label>
+        <textarea id="edit-instructions" rows="4" maxlength="500" required
+          placeholder="e.g. Change the baking temp to 375°F and add a note about using orange blossom honey…"></textarea>
+        <button type="submit" class="modal-submit" id="ai-edit-btn">Update with AI</button>
+      </form>
+    </div>
+
+    <div id="edit-pane-direct" class="edit-pane">
+      <p class="modal-sub">Edit the recipe card HTML directly.</p>
+      <textarea id="direct-edit-html" spellcheck="false"></textarea>
+      <button class="modal-submit" onclick="submitDirectEdit()" id="direct-edit-btn">Save Changes</button>
+    </div>
+
+    <div id="edit-pane-delete" class="edit-pane">
+      <div class="delete-warning">
+        <p>You are about to permanently delete:</p>
+        <p class="delete-recipe-name" id="delete-recipe-name"></p>
+        <p style="margin-top:0.6rem;font-size:0.82rem;color:#b91c1c;">This cannot be undone.</p>
+      </div>
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;font-size:0.88rem;color:#991b1b;cursor:pointer;">
+        <input type="checkbox" id="delete-confirm-check" onchange="document.getElementById('delete-btn').disabled=!this.checked">
+        Yes, I want to delete this recipe
+      </label>
+      <button class="delete-confirm-btn" onclick="submitDelete()" id="delete-btn" disabled>Delete Recipe</button>
+    </div>
+
+    <p id="edit-modal-status"></p>
   </div>
 </div>
 
@@ -1545,29 +1647,67 @@
 
   // ── Edit Recipe ─────────────────────────────────────────
   function openEditModal(cardId) {
-    document.getElementById('edit-card-id').value          = cardId;
-    document.getElementById('edit-instructions').value     = '';
+    document.getElementById('edit-card-id').value = cardId;
+    document.getElementById('edit-instructions').value = '';
+    document.getElementById('direct-edit-html').value = 'Loading…';
+    document.getElementById('direct-edit-btn').disabled = true;
     document.getElementById('edit-modal-status').style.display = 'none';
-    document.getElementById('edit-submit-btn').disabled    = false;
-    document.getElementById('edit-submit-btn').textContent = 'Update Recipe';
+    document.getElementById('delete-confirm-check').checked = false;
+    document.getElementById('delete-btn').disabled = true;
+    document.getElementById('delete-btn').textContent = 'Delete Recipe';
+    document.getElementById('ai-edit-btn').disabled = false;
+    document.getElementById('ai-edit-btn').textContent = 'Update with AI';
+    switchEditTab('ai');
     document.getElementById('edit-recipe-modal').style.display = 'flex';
     document.getElementById('edit-instructions').focus();
+
+    const card = document.getElementById(cardId);
+    const titleEl = card ? card.querySelector('.front-title') : null;
+    document.getElementById('delete-recipe-name').textContent = titleEl ? titleEl.textContent : cardId;
+
+    fetch('/api/get-card-html?cardId=' + encodeURIComponent(cardId))
+      .then(r => r.json())
+      .then(data => {
+        if (data.cardHtml) {
+          document.getElementById('direct-edit-html').value = data.cardHtml;
+          document.getElementById('direct-edit-btn').disabled = false;
+        } else {
+          document.getElementById('direct-edit-html').value = 'Error: could not load card HTML';
+        }
+      })
+      .catch(() => {
+        document.getElementById('direct-edit-html').value = 'Error: could not load card HTML';
+      });
   }
 
   function closeEditModal() {
     document.getElementById('edit-recipe-modal').style.display = 'none';
   }
 
-  async function submitEdit(event) {
+  function switchEditTab(tab) {
+    document.querySelectorAll('.edit-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.edit-pane').forEach(p => p.classList.remove('active'));
+    document.querySelector('.edit-tab[data-tab="' + tab + '"]').classList.add('active');
+    document.getElementById('edit-pane-' + tab).classList.add('active');
+    document.getElementById('edit-modal-status').style.display = 'none';
+  }
+
+  function showEditStatus(msg, isError) {
+    const status = document.getElementById('edit-modal-status');
+    status.style.display = 'block';
+    status.style.color = isError ? 'var(--red)' : '#2a7a2a';
+    status.textContent = msg;
+  }
+
+  async function submitAiEdit(event) {
     event.preventDefault();
     const cardId       = document.getElementById('edit-card-id').value;
     const instructions = document.getElementById('edit-instructions').value.trim();
-    const btn          = document.getElementById('edit-submit-btn');
-    const status       = document.getElementById('edit-modal-status');
+    const btn          = document.getElementById('ai-edit-btn');
 
     btn.disabled    = true;
     btn.textContent = 'Updating with AI…';
-    status.style.display = 'none';
+    document.getElementById('edit-modal-status').style.display = 'none';
 
     try {
       const res  = await fetch('/api/edit-recipe', {
@@ -1578,17 +1718,65 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Something went wrong');
 
-      status.style.display = 'block';
-      status.style.color   = '#2a7a2a';
-      status.textContent   = '✓ Recipe updated! Refreshing…';
+      showEditStatus('Recipe updated! Refreshing…', false);
       setTimeout(() => window.location.reload(), 2000);
-
     } catch (err) {
-      status.style.display = 'block';
-      status.style.color   = 'var(--red)';
-      status.textContent   = err.message;
+      showEditStatus(err.message, true);
       btn.disabled    = false;
-      btn.textContent = 'Update Recipe';
+      btn.textContent = 'Update with AI';
+    }
+  }
+
+  async function submitDirectEdit() {
+    const cardId  = document.getElementById('edit-card-id').value;
+    const newHtml = document.getElementById('direct-edit-html').value;
+    const btn     = document.getElementById('direct-edit-btn');
+
+    btn.disabled    = true;
+    btn.textContent = 'Saving…';
+    document.getElementById('edit-modal-status').style.display = 'none';
+
+    try {
+      const res = await fetch('/api/save-card-html', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ cardId, cardHtml: newHtml }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
+
+      showEditStatus('Changes saved! Refreshing…', false);
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err) {
+      showEditStatus(err.message, true);
+      btn.disabled    = false;
+      btn.textContent = 'Save Changes';
+    }
+  }
+
+  async function submitDelete() {
+    const cardId = document.getElementById('edit-card-id').value;
+    const btn    = document.getElementById('delete-btn');
+
+    btn.disabled    = true;
+    btn.textContent = 'Deleting…';
+    document.getElementById('edit-modal-status').style.display = 'none';
+
+    try {
+      const res = await fetch('/api/delete-recipe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ cardId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
+
+      showEditStatus('Recipe deleted! Refreshing…', false);
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err) {
+      showEditStatus(err.message, true);
+      btn.disabled    = false;
+      btn.textContent = 'Delete Recipe';
     }
   }
 
