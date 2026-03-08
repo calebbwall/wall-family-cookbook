@@ -3,20 +3,7 @@
  *
  * SETUP (Replit Secrets tab — never put these in code):
  *   GEMINI_API_KEY  → Get from https://aistudio.google.com (free tier available)
- *   GITHUB_TOKEN    → See instructions below
- *   GITHUB_OWNER    → calebbwall
- *   GITHUB_REPO     → wall-family-cookbook
- *
- * GITHUB TOKEN SETUP:
- *   1. Go to github.com → Settings → Developer settings →
- *      Personal access tokens → Fine-grained tokens
- *   2. Click "Generate new token"
- *   3. Name: "Wall Family Cookbook"
- *   4. Expiration: 1 year
- *   5. Repository access → Only select repositories → wall-family-cookbook
- *   6. Repository permissions → Contents → Read and write
- *   7. Click "Generate token" — copy it immediately (shown only once)
- *   8. Paste into Replit Secrets as GITHUB_TOKEN
+ *   DATABASE_URL    → Auto-provisioned by Replit PostgreSQL
  */
 
 import express from 'express';
@@ -27,65 +14,14 @@ import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import pg from 'pg';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const HTML_PATH  = path.join(__dirname, 'index.html');
 const PORT       = process.env.PORT || 5000;
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
-let cachedHtml = null;
-
-async function ensureDbTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS cookbook_html (
-      id INTEGER PRIMARY KEY DEFAULT 1,
-      content TEXT NOT NULL,
-      updated_at TIMESTAMP DEFAULT NOW(),
-      CONSTRAINT single_row CHECK (id = 1)
-    )
-  `);
-}
-
-async function loadHtmlFromDb() {
-  try {
-    await ensureDbTable();
-    const result = await pool.query('SELECT content FROM cookbook_html WHERE id = 1');
-    if (result.rows.length > 0) {
-      cachedHtml = result.rows[0].content;
-      try { await fs.writeFile(HTML_PATH, cachedHtml, 'utf-8'); } catch (_) {}
-      console.log('[startup] Loaded index.html from database');
-      return true;
-    }
-  } catch (err) {
-    console.warn('[startup] Database load failed:', err.message);
-  }
-  return false;
-}
-
-async function saveHtmlToDb(htmlContent) {
-  cachedHtml = htmlContent;
-  try {
-    await pool.query(
-      `INSERT INTO cookbook_html (id, content, updated_at) VALUES (1, $1, NOW())
-       ON CONFLICT (id) DO UPDATE SET content = $1, updated_at = NOW()`,
-      [htmlContent]
-    );
-  } catch (err) {
-    console.error('[db] Failed to save HTML to database:', err.message);
-  }
-}
-
-async function getCurrentHtml() {
-  if (cachedHtml) return cachedHtml;
-  try {
-    const result = await pool.query('SELECT content FROM cookbook_html WHERE id = 1');
-    if (result.rows.length > 0) {
-      cachedHtml = result.rows[0].content;
-      return cachedHtml;
-    }
-  } catch (_) {}
-  return await fs.readFile(HTML_PATH, 'utf-8');
-}
+// Template HTML — loaded once at startup, never modified on disk
+let templateHtml = null;
 
 const SECTION_MAP = {
   appetizer: 'APPETIZERS',
@@ -96,6 +32,123 @@ const SECTION_MAP = {
   breakfast: 'BREAKFAST',
   dessert:   'DESSERTS',
 };
+
+// Canonical category per section (used for migration)
+const SECTION_TO_CATEGORY = {
+  APPETIZERS: 'appetizer',
+  ENTREES:    'entree',
+  SIDES:      'side',
+  SNACKS:     'snack',
+  BREAKFAST:  'breakfast',
+  DESSERTS:   'dessert',
+};
+
+// ── Database ──────────────────────────────────────────────────────────────────
+
+async function ensureTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS recipes (
+      id          SERIAL PRIMARY KEY,
+      category    TEXT NOT NULL,
+      author_name TEXT NOT NULL,
+      card_html   TEXT NOT NULL,
+      card_id     TEXT UNIQUE NOT NULL,
+      created_at  TIMESTAMP DEFAULT NOW()
+    )
+  `);
+}
+
+/**
+ * One-time migration: pull recipe cards out of the old cookbook_html table
+ * (where the whole index.html was stored as a blob) and insert them as
+ * individual rows in the new recipes table.
+ */
+async function migrateFromOldTable() {
+  try {
+    const result = await pool.query('SELECT content FROM cookbook_html WHERE id = 1');
+    if (result.rows.length === 0) return 0;
+
+    const html      = result.rows[0].content;
+    const endMarker = '</div><!-- /flip-card -->';
+    let count       = 0;
+
+    for (const [sectionKey, category] of Object.entries(SECTION_TO_CATEGORY)) {
+      const startIdx = html.indexOf(`<!-- ${sectionKey}_START -->`);
+      const endIdx   = html.indexOf(`<!-- ${sectionKey}_END -->`);
+      if (startIdx === -1 || endIdx === -1) continue;
+
+      const sectionHtml = html.slice(startIdx, endIdx);
+      const cardPattern = /<div class="flip-card" id="(card-[^"]+)"/g;
+      let match;
+
+      while ((match = cardPattern.exec(sectionHtml)) !== null) {
+        const cardId      = match[1];
+        const cardStartPos = match.index;
+        const cardEndPos  = sectionHtml.indexOf(endMarker, cardStartPos);
+        if (cardEndPos === -1) continue;
+
+        const cardHtml   = sectionHtml.slice(cardStartPos, cardEndPos + endMarker.length);
+        const authorM    = cardHtml.match(/class="front-author">[^<]*<span>([^<]+)</);
+        const authorName = authorM ? authorM[1] : 'Family';
+
+        await pool.query(
+          `INSERT INTO recipes (category, author_name, card_html, card_id)
+           VALUES ($1, $2, $3, $4) ON CONFLICT (card_id) DO NOTHING`,
+          [category, authorName, cardHtml, cardId]
+        );
+        count++;
+      }
+    }
+
+    console.log(`[migration] Migrated ${count} recipe(s) from old cookbook_html table`);
+    return count;
+  } catch (err) {
+    console.warn('[migration] No old table to migrate from:', err.message);
+    return 0;
+  }
+}
+
+// ── Page builder ──────────────────────────────────────────────────────────────
+
+async function buildPage() {
+  const { rows } = await pool.query('SELECT * FROM recipes ORDER BY created_at ASC');
+  let html = templateHtml;
+
+  for (const [sectionKey, _category] of Object.entries(SECTION_TO_CATEGORY)) {
+    const sectionCards = rows.filter(r => SECTION_MAP[r.category] === sectionKey);
+    const count        = sectionCards.length;
+    const countLabel   = count === 1 ? '1 recipe' : `${count} recipes`;
+    const sectionId    = sectionKey.toLowerCase();
+
+    // Inject cards between START/END markers
+    let injection = '';
+    if (sectionCards.length > 0) {
+      const cardsHtml = sectionCards.map(r => r.card_html).join('\n    ');
+      injection = `\n  <div class="card-grid">\n    ${cardsHtml}\n  </div>\n  `;
+    }
+
+    html = html.replace(
+      new RegExp(`(<!-- ${sectionKey}_START -->)[\\s\\S]*?(<!-- ${sectionKey}_END -->)`),
+      `$1${injection}$2`
+    );
+
+    // Update recipe count in section header
+    html = html.replace(
+      new RegExp(`(<span class="section-count" id="count-${sectionId}">)[^<]*(</span>)`),
+      `$1${countLabel}$2`
+    );
+
+    // Show/hide empty state
+    if (count > 0) {
+      html = html.replace(
+        `<div class="empty-state" id="empty-${sectionId}">`,
+        `<div class="empty-state" id="empty-${sectionId}" style="display:none">`
+      );
+    }
+  }
+
+  return html;
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -235,66 +288,6 @@ function buildGatePage(errorMsg = '') {
 </html>`;
 }
 
-// ── Startup: sync index.html from GitHub ─────────────────────────────────────
-
-async function syncFromGitHub() {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.log('[startup] No GITHUB_TOKEN set — skipping GitHub sync, serving local file');
-    return;
-  }
-  try {
-    const res = await fetch(GITHUB_API, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
-    if (!res.ok) throw new Error(`GitHub GET ${res.status}`);
-    const { content } = await res.json();
-    const html = Buffer.from(content, 'base64').toString('utf-8');
-    await fs.writeFile(HTML_PATH, html, 'utf-8');
-    console.log('[startup] index.html synced from GitHub');
-  } catch (err) {
-    console.warn('[startup] GitHub sync failed, using local file:', err.message);
-  }
-}
-
-// ── GitHub push ───────────────────────────────────────────────────────────────
-
-async function pushToGitHub(htmlContent, commitMessage) {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error('GITHUB_TOKEN is not set in Replit Secrets');
-
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'Content-Type': 'application/json',
-  };
-
-  const getRes = await fetch(GITHUB_API, { headers });
-  if (!getRes.ok) {
-    if (getRes.status === 409) throw new Error('Someone else just updated the cookbook — please try again in a moment');
-    throw new Error(`GitHub read failed (${getRes.status})`);
-  }
-  const { sha } = await getRes.json();
-
-  const encoded = Buffer.from(htmlContent, 'utf-8').toString('base64');
-  const putRes  = await fetch(GITHUB_API, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ message: commitMessage || 'Update cookbook', content: encoded, sha }),
-  });
-
-  if (!putRes.ok) {
-    const err = await putRes.json().catch(() => ({}));
-    if (putRes.status === 409) throw new Error('Someone else just updated the cookbook — please try again in a moment');
-    throw new Error(err.message || `GitHub push failed (${putRes.status})`);
-  }
-}
-
 // ── URL fetcher ───────────────────────────────────────────────────────────────
 
 async function fetchUrlContent(url) {
@@ -310,8 +303,8 @@ async function fetchUrlContent(url) {
   if (!res.ok) throw new Error(`That website blocked the request (${res.status}). Copy the recipe text from the page and paste it here instead.`);
 
   const html = await res.text();
-
   let text = '';
+
   const jsonLdMatch = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
   if (jsonLdMatch) {
     for (const block of jsonLdMatch) {
@@ -337,7 +330,7 @@ async function fetchUrlContent(url) {
             break;
           }
         }
-      } catch { /* not valid JSON, skip */ }
+      } catch { /* skip invalid JSON-LD */ }
       if (text) break;
     }
   }
@@ -353,10 +346,7 @@ async function fetchUrlContent(url) {
   }
 
   text = text.slice(0, 12000);
-
-  if (text.length < 80) {
-    throw new Error("That URL doesn't have readable recipe text — try pasting the recipe directly");
-  }
+  if (text.length < 80) throw new Error("That URL doesn't have readable recipe text — try pasting the recipe directly");
   return text;
 }
 
@@ -370,16 +360,18 @@ function slugify(text) {
     .slice(0, 28);
 }
 
-function generateUniqueId(existingHtml, baseName) {
+async function generateUniqueId(baseName) {
   let id = slugify(baseName);
   let n  = 2;
-  while (existingHtml.includes(`id="${id}"`)) {
+  while (true) {
+    const { rows } = await pool.query('SELECT 1 FROM recipes WHERE card_id = $1', [id]);
+    if (rows.length === 0) break;
     id = slugify(baseName) + '-' + n++;
   }
   return id;
 }
 
-// ── Card HTML template (shared by add and edit prompts) ───────────────────────
+// ── Card HTML template ────────────────────────────────────────────────────────
 
 const CARD_TEMPLATE = (cardId, authorName) => `<div class="flip-card" id="${cardId}" onclick="toggleFlip(this)">
   <div class="flip-card-inner">
@@ -518,7 +510,6 @@ ${CARD_TEMPLATE(cardId, authorName)}`;
 }
 
 function buildEditPrompt(existingCardText, editInstructions, cardId) {
-  // Extract author from text if possible (look for "Added by NAME" pattern)
   const authorMatch = existingCardText.match(/Added by\s+(\w+)/i);
   const authorName  = authorMatch ? authorMatch[1] : 'Family';
 
@@ -558,9 +549,8 @@ async function generateCardHtml(prompt, useSearch = false) {
     model: 'gemini-2.5-flash',
     generationConfig: { temperature: 0.4, maxOutputTokens: 8000, thinkingConfig: { thinkingBudget: 0 } },
   };
-  if (useSearch) {
-    modelConfig.tools = [{ googleSearch: {} }];
-  }
+  if (useSearch) modelConfig.tools = [{ googleSearch: {} }];
+
   const model = genAI.getGenerativeModel(modelConfig);
 
   let cardHtml = '';
@@ -576,79 +566,16 @@ async function generateCardHtml(prompt, useSearch = false) {
     if (attempt === 2) throw new Error('AI returned malformed output — please try again');
   }
 
-  // Ensure closing marker is present
   if (!cardHtml.trimEnd().endsWith('</div><!-- /flip-card -->')) {
     cardHtml = cardHtml.trimEnd() + '\n</div><!-- /flip-card -->';
   }
 
-  // Safety: strip any script tags
+  // Safety: strip any script tags the AI may have generated
   cardHtml = cardHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
   return cardHtml;
 }
 
-// ── HTML injection (add new card) ─────────────────────────────────────────────
-
-function injectCard(html, category, cardHtml) {
-  const sectionKey  = SECTION_MAP[category];
-  const startMarker = `<!-- ${sectionKey}_START -->`;
-  const endMarker   = `<!-- ${sectionKey}_END -->`;
-
-  const startIdx = html.indexOf(startMarker);
-  const endIdx   = html.indexOf(endMarker);
-  if (startIdx === -1 || endIdx === -1) {
-    throw new Error(`Section markers missing for: ${sectionKey}`);
-  }
-
-  const before   = html.slice(0, startIdx + startMarker.length);
-  const existing = html.slice(startIdx + startMarker.length, endIdx);
-  const after    = html.slice(endIdx);
-
-  let newContent;
-  if (existing.includes('card-grid')) {
-    newContent = existing.replace(/(\s*)<\/div>(\s*)$/, `\n    ${cardHtml}\n  </div>\n  `);
-  } else {
-    newContent = `\n  <div class="card-grid">\n    ${cardHtml}\n  </div>\n  `;
-  }
-
-  let updated = before + newContent + after;
-
-  const currentCount = (existing.match(/class="flip-card"/g) || []).length;
-  const newCount     = currentCount + 1;
-  const countLabel   = newCount === 1 ? '1 recipe' : `${newCount} recipes`;
-  updated = updated.replace(
-    new RegExp(`(<span class="section-count" id="count-${sectionKey.toLowerCase()}">)[^<]*(</span>)`),
-    `$1${countLabel}$2`
-  );
-
-  if (currentCount === 0) {
-    updated = updated.replace(
-      `<div class="empty-state" id="empty-${sectionKey.toLowerCase()}">`,
-      `<div class="empty-state" id="empty-${sectionKey.toLowerCase()}" style="display:none">`
-    );
-  }
-
-  return updated;
-}
-
-// ── Card extraction and replacement (edit) ────────────────────────────────────
-
-function extractCardHtml(html, cardId) {
-  const startMarker = `<div class="flip-card" id="${cardId}"`;
-  const endMarker   = `</div><!-- /flip-card -->`;
-
-  const startIdx = html.indexOf(startMarker);
-  if (startIdx === -1) throw new Error(`Card not found: ${cardId}`);
-
-  const endIdx = html.indexOf(endMarker, startIdx);
-  if (endIdx === -1) throw new Error(`Card closing marker not found for: ${cardId}`);
-
-  const endPos = endIdx + endMarker.length;
-  return {
-    cardHtml: html.slice(startIdx, endPos),
-    startIdx,
-    endPos,
-  };
-}
+// ── Card text extractor (for edit prompt) ─────────────────────────────────────
 
 function stripCardToText(cardHtml) {
   return cardHtml
@@ -661,40 +588,31 @@ function stripCardToText(cardHtml) {
     .trim();
 }
 
-function replaceCard(html, cardId, newCardHtml) {
-  const { startIdx, endPos } = extractCardHtml(html, cardId);
-  return html.slice(0, startIdx) + newCardHtml + html.slice(endPos);
-}
-
 // ── Recipe catalog builder (for chat) ────────────────────────────────────────
 
-function buildRecipeCatalog(html) {
+function buildRecipeCatalog(rows) {
+  if (rows.length === 0) return 'No recipes have been added yet.';
+
+  const sections = {};
+  for (const row of rows) {
+    const sectionKey = SECTION_MAP[row.category] || 'OTHER';
+    if (!sections[sectionKey]) sections[sectionKey] = [];
+    sections[sectionKey].push(row);
+  }
+
   const lines = [];
-  const sections = ['APPETIZERS','ENTREES','SIDES','SNACKS','BREAKFAST','DESSERTS'];
-
-  for (const section of sections) {
-    const startIdx = html.indexOf(`<!-- ${section}_START -->`);
-    const endIdx   = html.indexOf(`<!-- ${section}_END -->`);
-    if (startIdx === -1 || endIdx === -1) continue;
-
-    const sectionHtml = html.slice(startIdx, endIdx);
-    if (!sectionHtml.includes('flip-card')) continue;
-
-    lines.push(`[${section}]`);
-
-    const cardPattern = /class="flip-card"[\s\S]*?<\/div><!-- \/flip-card -->/g;
-    let match;
-    while ((match = cardPattern.exec(sectionHtml)) !== null) {
-      const c       = match[0];
-      const title   = (c.match(/class="front-title">([^<]+)</) || [])[1] || '?';
-      const author  = (c.match(/class="front-author">[^<]*<span>([^<]+)</) || [])[1] || '?';
-      const sub     = (c.match(/class="front-sub">([^<]+)</) || [])[1] || '';
-      const chips   = [...c.matchAll(/class="chip">([^<]+)</g)].map(m => m[1]).join(', ');
-      lines.push(`- ${title} (by ${author}): ${chips}${sub ? ' — ' + sub : ''}`);
+  for (const [sectionKey, recipes] of Object.entries(sections)) {
+    lines.push(`[${sectionKey}]`);
+    for (const recipe of recipes) {
+      const c     = recipe.card_html;
+      const title = (c.match(/class="front-title">([^<]+)</) || [])[1] || '?';
+      const sub   = (c.match(/class="front-sub">([^<]+)</) || [])[1] || '';
+      const chips = [...c.matchAll(/class="chip">([^<]+)</g)].map(m => m[1]).join(', ');
+      lines.push(`- ${title} (by ${recipe.author_name}): ${chips}${sub ? ' — ' + sub : ''}`);
     }
   }
 
-  return lines.length > 0 ? lines.join('\n') : 'No recipes have been added yet.';
+  return lines.join('\n');
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -723,14 +641,19 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
-// ── Protected page routes (must come before express.static) ───────────────────
+// ── Protected page route ──────────────────────────────────────────────────────
 
 app.get(['/', '/index.html'], requireAuth, async (req, res) => {
-  const html = await getCurrentHtml();
-  res.type('html').send(html);
+  try {
+    const html = await buildPage();
+    res.type('html').send(html);
+  } catch (err) {
+    console.error('[page]', err);
+    res.status(500).send('Error loading cookbook — please refresh');
+  }
 });
 
-// ── Static assets (unprotected — only JS/CSS would be here; all assets are inline) ──
+// ── Static assets (unprotected — fonts, icons, etc.) ─────────────────────────
 
 app.use(express.static(__dirname));
 
@@ -758,27 +681,26 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
       try {
         recipeText = await fetchUrlContent(recipeText);
       } catch {
-        // Server fetch failed — will pass URL directly to Gemini instead
+        // Server fetch failed — will pass URL directly to Gemini
       }
     }
 
-    const currentHtml = await getCurrentHtml();
-    const firstLine   = isUrl ? recipeText.split('\n')[0].slice(0, 80) : recipeText.split('\n')[0].slice(0, 80);
-    const cardId      = generateUniqueId(currentHtml, firstLine);
+    const firstLine = recipeText.split('\n')[0].slice(0, 80);
+    const cardId    = await generateUniqueId(firstLine);
 
-    let prompt, cardHtml;
+    let cardHtml;
     if (isUrl && /^https?:\/\/.+/i.test(recipeText)) {
-      prompt = buildUrlPrompt(recipeText, category, authorName.trim(), cardId);
+      const prompt = buildUrlPrompt(recipeText, category, authorName.trim(), cardId);
       cardHtml = await generateCardHtml(prompt, true);
     } else {
-      prompt = buildPrompt(recipeText, category, authorName.trim(), cardId);
+      const prompt = buildPrompt(recipeText, category, authorName.trim(), cardId);
       cardHtml = await generateCardHtml(prompt);
     }
 
-    const updatedHtml = injectCard(currentHtml, category, cardHtml);
-
-    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
-    await saveHtmlToDb(updatedHtml);
+    await pool.query(
+      `INSERT INTO recipes (category, author_name, card_html, card_id) VALUES ($1, $2, $3, $4)`,
+      [category, authorName.trim(), cardHtml, cardId]
+    );
 
     res.json({ success: true, cardId });
 
@@ -802,20 +724,14 @@ app.post('/api/edit-recipe', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Edit description too long (max 500 characters)' });
     }
 
-    const currentHtml = await getCurrentHtml();
-    const { cardHtml } = extractCardHtml(currentHtml, cardId);
-    const cardText     = stripCardToText(cardHtml);
+    const { rows } = await pool.query('SELECT * FROM recipes WHERE card_id = $1', [cardId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Recipe not found' });
 
+    const cardText    = stripCardToText(rows[0].card_html);
     const prompt      = buildEditPrompt(cardText, editInstructions.trim(), cardId);
     const newCardHtml = await generateCardHtml(prompt);
 
-    const updatedHtml = replaceCard(currentHtml, cardId, newCardHtml);
-
-    const titleMatch  = newCardHtml.match(/class="front-title">([^<]+)</);
-    const recipeName  = titleMatch ? titleMatch[1] : cardId;
-
-    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
-    await saveHtmlToDb(updatedHtml);
+    await pool.query('UPDATE recipes SET card_html = $1 WHERE card_id = $2', [newCardHtml, cardId]);
 
     res.json({ success: true, cardId });
 
@@ -831,11 +747,11 @@ app.get('/api/get-card-html', requireAuth, async (req, res) => {
     if (!cardId || !/^card-[a-z0-9-]+$/.test(cardId)) {
       return res.status(400).json({ error: 'Invalid card ID' });
     }
-    const currentHtml = await getCurrentHtml();
-    const { cardHtml } = extractCardHtml(currentHtml, cardId);
-    res.json({ cardHtml });
+    const { rows } = await pool.query('SELECT card_html FROM recipes WHERE card_id = $1', [cardId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Recipe not found' });
+    res.json({ cardHtml: rows[0].card_html });
   } catch (err) {
-    res.status(404).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -858,11 +774,11 @@ app.post('/api/save-card-html', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'HTML contains forbidden elements (scripts, iframes, etc). Please remove them.' });
     }
 
-    const currentHtml = await getCurrentHtml();
-    const updatedHtml = replaceCard(currentHtml, cardId, sanitized);
-
-    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
-    await saveHtmlToDb(updatedHtml);
+    const result = await pool.query(
+      'UPDATE recipes SET card_html = $1 WHERE card_id = $2',
+      [sanitized, cardId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Recipe not found' });
 
     res.json({ success: true, cardId });
   } catch (err) {
@@ -878,12 +794,8 @@ app.post('/api/delete-recipe', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid card ID' });
     }
 
-    const currentHtml = await getCurrentHtml();
-    const { startIdx, endPos } = extractCardHtml(currentHtml, cardId);
-    const updatedHtml = currentHtml.slice(0, startIdx) + currentHtml.slice(endPos);
-
-    try { await fs.writeFile(HTML_PATH, updatedHtml, 'utf-8'); } catch (_) {}
-    await saveHtmlToDb(updatedHtml);
+    const result = await pool.query('DELETE FROM recipes WHERE card_id = $1', [cardId]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Recipe not found' });
 
     res.json({ success: true });
   } catch (err) {
@@ -906,8 +818,8 @@ app.post('/api/chat', requireAuth, async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set in Replit Secrets');
 
-    const currentHtml   = await getCurrentHtml();
-    const recipeCatalog = buildRecipeCatalog(currentHtml);
+    const { rows } = await pool.query('SELECT * FROM recipes ORDER BY created_at ASC');
+    const recipeCatalog = buildRecipeCatalog(rows);
 
     const systemPrompt = `You are a helpful, warm cooking assistant for the Wall Family Cookbook — a private family recipe collection.
 
@@ -932,7 +844,7 @@ Your role:
     // Validate and cap history at last 4 turns (8 messages)
     const safeHistory = (Array.isArray(history) ? history : [])
       .slice(-8)
-      .filter(m => m && (m.role === 'user' || m.role === 'model') && typeof m.parts === 'string')
+      .filter(m => m && (m.role === 'user' || m.role === 'model') && m.parts)
       .map(m => ({ role: m.role, parts: [{ text: String(m.parts).slice(0, 500) }] }));
 
     const chat   = model.startChat({ history: safeHistory });
@@ -950,11 +862,33 @@ Your role:
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 (async () => {
-  const loaded = await loadHtmlFromDb();
-  if (!loaded) {
-    const localHtml = await fs.readFile(HTML_PATH, 'utf-8');
-    await saveHtmlToDb(localHtml);
-    console.log('[startup] Seeded database from local index.html');
+  try {
+    // Load the static HTML template once
+    templateHtml = await fs.readFile(HTML_PATH, 'utf-8');
+    console.log('[startup] HTML template loaded');
+
+    // Ensure the recipes table exists
+    await ensureTable();
+
+    // Check if we need to populate data
+    const { rows: countRows } = await pool.query('SELECT COUNT(*) AS count FROM recipes');
+    const recipeCount = parseInt(countRows[0].count, 10);
+
+    if (recipeCount === 0) {
+      console.log('[startup] Recipes table empty — checking for old data to migrate...');
+      const migrated = await migrateFromOldTable();
+      if (migrated === 0) {
+        console.log('[startup] No previous data found — starting with an empty cookbook');
+      }
+    } else {
+      console.log(`[startup] Loaded ${recipeCount} recipe(s) from database`);
+    }
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Wall Family Cookbook running on http://0.0.0.0:${PORT}`);
+    });
+  } catch (err) {
+    console.error('[startup] Fatal error:', err);
+    process.exit(1);
   }
-  app.listen(PORT, '0.0.0.0', () => console.log(`Wall Family Cookbook running on http://0.0.0.0:${PORT}`));
 })();
