@@ -7,7 +7,7 @@ A family recipe website with AI-powered features for adding, editing, and chatti
 - **Type**: Node.js/Express backend serving a single-page HTML frontend
 - **Entry point**: `server.js`
 - **Frontend**: `index.html` (embedded CSS/JS, Google Fonts: Playfair Display, Lato)
-- **AI**: Google Gemini 2.0 Flash via `@google/generative-ai`
+- **AI**: Google Gemini 2.5 Flash via `@google/generative-ai`
 - **Storage**: Recipes stored directly in `index.html`, synced to GitHub repo on changes
 - **Auth**: Cookie-based passphrase gate (password: "Joe+Linda")
 

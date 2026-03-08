@@ -70,7 +70,7 @@ function parseCookies(cookieHeader) {
 function requireAuth(req, res, next) {
   const cookies = parseCookies(req.headers.cookie);
   if (cookies[COOKIE_NAME] === VALID_TOKEN) return next();
-  res.status(401).send(buildGatePage());
+  res.status(200).send(buildGatePage());
 }
 
 function buildGatePage(errorMsg = '') {
@@ -437,7 +437,7 @@ async function generateCardHtml(prompt) {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     generationConfig: { temperature: 0.4, maxOutputTokens: 3000 },
   });
 
@@ -721,7 +721,7 @@ Your role:
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: { temperature: 0.7, maxOutputTokens: 600 },
       systemInstruction: systemPrompt,
     });
