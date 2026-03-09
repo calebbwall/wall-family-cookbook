@@ -152,7 +152,7 @@ async function buildPage() {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-const PASSPHRASE     = 'Joe+Linda';
+const PASSPHRASE     = process.env.PASSPHRASE || 'Joe+Linda';
 const COOKIE_NAME    = 'wfc_auth';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
 
