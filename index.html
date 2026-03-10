@@ -807,14 +807,43 @@
       min-height: 110px;
     }
     #edit-recipe-modal textarea:focus { border-color: var(--red); }
-    #direct-edit-html {
-      min-height: 250px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.78rem;
-      line-height: 1.45;
-      white-space: pre;
-      tab-size: 2;
+    #direct-edit-html { display: none; }
+
+    /* ── Direct Edit Structured Form ───────────────────────── */
+    .df-section { margin-bottom: 1rem; }
+    .df-label {
+      display: block;
+      font-size: 0.71rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--brown);
+      margin-bottom: 0.35rem;
     }
+    .df-row-2    { display: grid; grid-template-columns: 72px 1fr; gap: 0.6rem; }
+    .df-chips-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .df-stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.45rem; }
+    .df-list-row { display: flex; gap: 0.4rem; align-items: flex-start; margin-bottom: 0.45rem; }
+    .df-list-row > input, .df-list-row > textarea { flex: 1; min-width: 0; }
+    .df-ing-amt  { flex: 0 0 90px !important; }
+    .df-step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+    .df-remove-btn {
+      flex: 0 0 28px; height: 28px; margin-top: 5px;
+      border: 1.5px solid var(--tan-dark); border-radius: 6px;
+      background: none; color: var(--muted); font-size: 1rem;
+      cursor: pointer; padding: 0; line-height: 1;
+      transition: background 0.15s, color 0.15s;
+    }
+    .df-remove-btn:hover { background: #fef2f2; color: var(--red); border-color: var(--red); }
+    .df-add-btn {
+      padding: 0.35rem 0.85rem; background: none;
+      border: 1.5px dashed var(--tan-dark); border-radius: 6px;
+      color: var(--brown); font-size: 0.82rem; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .df-add-btn:hover { border-color: var(--red); color: var(--red); }
+    #edit-recipe-modal #edit-pane-direct textarea { min-height: 52px; }
+
     .delete-warning {
       background: #fef2f2;
       border: 1px solid #fca5a5;
@@ -883,7 +912,7 @@
       top: 0;
       right: 0;
       width: 380px;
-      height: 100vh;
+      height: 100dvh;
       background: var(--dark);
       z-index: 450;
       display: flex;
@@ -1181,8 +1210,61 @@
     </div>
 
     <div id="edit-pane-direct" class="edit-pane">
-      <p class="modal-sub">Edit the recipe card HTML directly.</p>
+      <!-- Hidden — keeps raw HTML for parsing; populated by openEditModal fetch -->
       <textarea id="direct-edit-html" spellcheck="false"></textarea>
+
+      <div class="df-section">
+        <div class="df-row-2">
+          <div><label class="df-label">Emoji</label><input id="df-emoji" type="text" maxlength="8" placeholder="🍕"></div>
+          <div><label class="df-label">Badge</label><input id="df-badge" type="text" placeholder="Pizza · Italian"></div>
+        </div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Title</label>
+        <input id="df-title" type="text" placeholder="Recipe title">
+      </div>
+      <div class="df-section">
+        <label class="df-label">Subtitle</label>
+        <input id="df-sub" type="text" placeholder="Short subtitle or source">
+      </div>
+      <div class="df-section">
+        <label class="df-label">Info chips (4 small tags on the front)</label>
+        <div class="df-chips-grid">
+          <input id="df-chip-0" type="text" placeholder="e.g. 8 servings">
+          <input id="df-chip-1" type="text" placeholder="e.g. 425°F">
+          <input id="df-chip-2" type="text" placeholder="e.g. 45 min">
+          <input id="df-chip-3" type="text" placeholder="e.g. Crispy">
+        </div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Stats (3 boxes on the back)</label>
+        <div id="df-stats"></div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Ingredients</label>
+        <div id="df-ingredients"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddIngredient('','')">+ Add ingredient</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Steps</label>
+        <div id="df-steps"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddStep('','')">+ Add step</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Calibration notes <span style="font-weight:400;text-transform:none">(tips for tweaking the recipe)</span></label>
+        <div id="df-notes"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddNote('','')">+ Add note</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Storage</label>
+        <div id="df-storage"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddStorage('','')">+ Add storage option</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Chef's note</label>
+        <textarea id="df-chefs-note" placeholder="One key tip or secret…"></textarea>
+      </div>
+
       <button class="modal-submit" onclick="submitDirectEdit()" id="direct-edit-btn">Save Changes</button>
     </div>
 
@@ -1329,6 +1411,10 @@
         if (data.cardHtml) {
           document.getElementById('direct-edit-html').value = data.cardHtml;
           document.getElementById('direct-edit-btn').disabled = false;
+          // If user already switched to Direct tab while loading, populate now
+          if (document.getElementById('edit-pane-direct').classList.contains('active')) {
+            populateDirectForm(data.cardHtml);
+          }
         } else {
           document.getElementById('direct-edit-html').value = 'Error: could not load card HTML';
         }
@@ -1348,6 +1434,10 @@
     document.querySelector('.edit-tab[data-tab="' + tab + '"]').classList.add('active');
     document.getElementById('edit-pane-' + tab).classList.add('active');
     document.getElementById('edit-modal-status').style.display = 'none';
+    if (tab === 'direct') {
+      const html = document.getElementById('direct-edit-html').value;
+      if (html && html !== 'Loading…') populateDirectForm(html);
+    }
   }
 
   function showEditStatus(msg, isError) {
@@ -1385,16 +1475,221 @@
     }
   }
 
+  // ── Direct Edit: parse card HTML into form fields ───────
+  function populateDirectForm(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    // Emoji — first text node inside .front-img
+    let emoji = '';
+    const frontImg = doc.querySelector('.front-img');
+    if (frontImg) {
+      for (const node of frontImg.childNodes) {
+        if (node.nodeType === 3 && node.textContent.trim()) { emoji = node.textContent.trim(); break; }
+      }
+    }
+    document.getElementById('df-emoji').value = emoji;
+    document.getElementById('df-badge').value = doc.querySelector('.front-badge')?.textContent.trim() ?? '';
+    document.getElementById('df-title').value = doc.querySelector('.front-title')?.textContent.trim() ?? '';
+    document.getElementById('df-sub').value   = doc.querySelector('.front-sub')?.textContent.trim() ?? '';
+
+    const chips = [...doc.querySelectorAll('.chip')];
+    for (let i = 0; i < 4; i++) document.getElementById('df-chip-' + i).value = chips[i]?.textContent.trim() ?? '';
+
+    // Stats — always 3 rows
+    const statsEl = document.getElementById('df-stats');
+    statsEl.innerHTML = '';
+    const stats = [...doc.querySelectorAll('.back-stat')];
+    for (let i = 0; i < 3; i++) {
+      const lbl = stats[i]?.querySelector('.back-stat-label')?.textContent.trim() ?? '';
+      const val = stats[i]?.querySelector('.back-stat-val')?.textContent.trim() ?? '';
+      const row = document.createElement('div');
+      row.className = 'df-stat-row';
+      const li = document.createElement('input'); li.id = 'df-stat-label-' + i; li.type = 'text'; li.placeholder = 'Label'; li.value = lbl;
+      const vi = document.createElement('input'); vi.id = 'df-stat-val-' + i;   vi.type = 'text'; vi.placeholder = 'Value'; vi.value = val;
+      row.appendChild(li); row.appendChild(vi);
+      statsEl.appendChild(row);
+    }
+
+    // Ingredients
+    document.getElementById('df-ingredients').innerHTML = '';
+    doc.querySelectorAll('.b-ing-row').forEach(r => dfAddIngredient(
+      r.querySelector('.b-ing-name')?.textContent.trim() ?? '',
+      r.querySelector('.b-ing-amt')?.textContent.trim() ?? ''
+    ));
+
+    // Steps
+    document.getElementById('df-steps').innerHTML = '';
+    doc.querySelectorAll('.b-step').forEach(s => {
+      const stepTitle = s.querySelector('.b-step-title')?.textContent.trim().replace(/\.$/, '') ?? '';
+      const full      = s.querySelector('.b-step-text')?.textContent.trim() ?? '';
+      const detail    = full.startsWith(stepTitle + '.') ? full.slice(stepTitle.length + 1).trim() : full;
+      dfAddStep(stepTitle, detail);
+    });
+
+    // Calibration notes
+    document.getElementById('df-notes').innerHTML = '';
+    doc.querySelectorAll('.b-note').forEach(n => dfAddNote(
+      n.querySelector('.b-note-goal')?.textContent.trim() ?? '',
+      n.querySelector('.b-note-tip')?.textContent.trim() ?? ''
+    ));
+
+    // Storage
+    document.getElementById('df-storage').innerHTML = '';
+    doc.querySelectorAll('.b-storage-row').forEach(r => dfAddStorage(
+      r.querySelector('.b-storage-method')?.textContent.trim() ?? '',
+      r.querySelector('.b-storage-dur')?.textContent.trim() ?? ''
+    ));
+
+    document.getElementById('df-chefs-note').value = doc.querySelector('.b-chefs-note')?.textContent.trim() ?? '';
+  }
+
+  function dfAddIngredient(name, amt) {
+    const row = document.createElement('div'); row.className = 'df-list-row';
+    const ni = document.createElement('input'); ni.type = 'text'; ni.className = 'df-ing-name'; ni.placeholder = 'Ingredient'; ni.value = name;
+    const ai = document.createElement('input'); ai.type = 'text'; ai.className = 'df-ing-amt';  ai.placeholder = 'Amount';     ai.value = amt;
+    const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'df-remove-btn'; rb.textContent = '×'; rb.onclick = () => row.remove();
+    row.appendChild(ni); row.appendChild(ai); row.appendChild(rb);
+    document.getElementById('df-ingredients').appendChild(row);
+  }
+
+  function dfAddStep(stepTitle, detailText) {
+    const row  = document.createElement('div'); row.className = 'df-list-row';
+    const body = document.createElement('div'); body.className = 'df-step-body';
+    const ti   = document.createElement('input');    ti.type = 'text'; ti.className = 'df-step-title-input'; ti.placeholder = 'Step name (e.g. Mix, Bake)'; ti.value = stepTitle;
+    const ta   = document.createElement('textarea'); ta.className = 'df-step-text-input'; ta.placeholder = 'Step detail…'; ta.value = detailText;
+    const rb   = document.createElement('button');   rb.type = 'button'; rb.className = 'df-remove-btn'; rb.textContent = '×'; rb.onclick = () => row.remove();
+    body.appendChild(ti); body.appendChild(ta);
+    row.appendChild(body); row.appendChild(rb);
+    document.getElementById('df-steps').appendChild(row);
+  }
+
+  function dfAddNote(goal, tip) {
+    const row  = document.createElement('div'); row.className = 'df-list-row';
+    const body = document.createElement('div'); body.className = 'df-step-body';
+    const gi   = document.createElement('input'); gi.type = 'text'; gi.className = 'df-note-goal'; gi.placeholder = 'Goal (e.g. Crispier)'; gi.value = goal;
+    const ti   = document.createElement('input'); ti.type = 'text'; ti.className = 'df-note-tip';  ti.placeholder = 'Tip';                   ti.value = tip;
+    const rb   = document.createElement('button'); rb.type = 'button'; rb.className = 'df-remove-btn'; rb.textContent = '×'; rb.onclick = () => row.remove();
+    body.appendChild(gi); body.appendChild(ti);
+    row.appendChild(body); row.appendChild(rb);
+    document.getElementById('df-notes').appendChild(row);
+  }
+
+  function dfAddStorage(method, dur) {
+    const row = document.createElement('div'); row.className = 'df-list-row';
+    const mi  = document.createElement('input'); mi.type = 'text'; mi.className = 'df-storage-method'; mi.placeholder = 'Method (e.g. Fridge)'; mi.value = method;
+    const di  = document.createElement('input'); di.type = 'text'; di.className = 'df-storage-dur';    di.placeholder = 'Duration (e.g. 3 days)'; di.value = dur;
+    const rb  = document.createElement('button'); rb.type = 'button'; rb.className = 'df-remove-btn'; rb.textContent = '×'; rb.onclick = () => row.remove();
+    row.appendChild(mi); row.appendChild(di); row.appendChild(rb);
+    document.getElementById('df-storage').appendChild(row);
+  }
+
+  function buildCardHtmlFromForm() {
+    const originalHtml = document.getElementById('direct-edit-html').value;
+    const doc = new DOMParser().parseFromString(originalHtml, 'text/html');
+
+    // Emoji — update first text node of .front-img
+    const frontImg = doc.querySelector('.front-img');
+    if (frontImg) {
+      for (const node of frontImg.childNodes) {
+        if (node.nodeType === 3 && node.textContent.trim()) {
+          node.textContent = document.getElementById('df-emoji').value.trim() + '\n        ';
+          break;
+        }
+      }
+    }
+    const badge = doc.querySelector('.front-badge');
+    if (badge) badge.textContent = document.getElementById('df-badge').value.trim();
+
+    const titleVal = document.getElementById('df-title').value.trim();
+    doc.querySelectorAll('.front-title, .back-title').forEach(el => el.textContent = titleVal);
+    const sub = doc.querySelector('.front-sub');
+    if (sub) sub.textContent = document.getElementById('df-sub').value.trim();
+
+    const chips = doc.querySelectorAll('.chip');
+    for (let i = 0; i < 4; i++) {
+      if (chips[i]) chips[i].textContent = document.getElementById('df-chip-' + i)?.value.trim() ?? chips[i].textContent;
+    }
+
+    const stats = doc.querySelectorAll('.back-stat');
+    for (let i = 0; i < 3; i++) {
+      const le = stats[i]?.querySelector('.back-stat-label'), ve = stats[i]?.querySelector('.back-stat-val');
+      if (le) le.textContent = document.getElementById('df-stat-label-' + i)?.value.trim() ?? le.textContent;
+      if (ve) ve.textContent = document.getElementById('df-stat-val-' + i)?.value.trim()   ?? ve.textContent;
+    }
+
+    // Replace a section by its heading text
+    function replaceSection(headingText, newEls) {
+      const all = [...doc.querySelectorAll('.b-heading')];
+      const idx = all.findIndex(h => h.textContent.trim() === headingText);
+      if (idx === -1) return;
+      const heading = all[idx], next = all[idx + 1];
+      let node = heading.nextElementSibling;
+      while (node && node !== next) { const nx = node.nextElementSibling; node.remove(); node = nx; }
+      newEls.forEach(el => next ? heading.parentElement.insertBefore(el, next) : heading.parentElement.appendChild(el));
+    }
+
+    // Ingredients
+    replaceSection('Ingredients', [...document.querySelectorAll('#df-ingredients .df-list-row')].map(row => {
+      const name = row.querySelector('.df-ing-name')?.value.trim() ?? '';
+      const amt  = row.querySelector('.df-ing-amt')?.value.trim() ?? '';
+      const el = doc.createElement('div'); el.className = 'b-ing-row';
+      const ns = doc.createElement('span'); ns.className = 'b-ing-name'; ns.textContent = name;
+      const as = doc.createElement('span'); as.className = 'b-ing-amt';  as.textContent = amt;
+      el.appendChild(ns); el.appendChild(as); return el;
+    }));
+
+    // Steps
+    replaceSection('Method', [...document.querySelectorAll('#df-steps .df-list-row')].map((row, i) => {
+      const t = row.querySelector('.df-step-title-input')?.value.trim() ?? '';
+      const d = row.querySelector('.df-step-text-input')?.value.trim() ?? '';
+      const el = doc.createElement('div'); el.className = 'b-step';
+      const num = doc.createElement('span'); num.className = 'b-step-num'; num.textContent = i + 1;
+      const p   = doc.createElement('p');   p.className = 'b-step-text';
+      const sp  = doc.createElement('span'); sp.className = 'b-step-title'; sp.textContent = t + '.';
+      p.appendChild(sp); p.append(' ' + d);
+      el.appendChild(num); el.appendChild(p); return el;
+    }));
+
+    // Calibration notes (wrapped in b-notes-grid)
+    const noteRows = [...document.querySelectorAll('#df-notes .df-list-row')];
+    const grid = doc.createElement('div'); grid.className = 'b-notes-grid';
+    noteRows.forEach(row => {
+      const g = row.querySelector('.df-note-goal')?.value.trim() ?? '';
+      const t = row.querySelector('.df-note-tip')?.value.trim() ?? '';
+      const n = doc.createElement('div'); n.className = 'b-note';
+      const gp = doc.createElement('p'); gp.className = 'b-note-goal'; gp.textContent = g;
+      const tp = doc.createElement('p'); tp.className = 'b-note-tip';  tp.textContent = t;
+      n.appendChild(gp); n.appendChild(tp); grid.appendChild(n);
+    });
+    replaceSection('Calibration Notes', noteRows.length ? [grid] : []);
+
+    // Storage
+    replaceSection('Storage', [...document.querySelectorAll('#df-storage .df-list-row')].map(row => {
+      const m = row.querySelector('.df-storage-method')?.value.trim() ?? '';
+      const d = row.querySelector('.df-storage-dur')?.value.trim() ?? '';
+      const el = doc.createElement('div'); el.className = 'b-storage-row';
+      const ms = doc.createElement('span'); ms.className = 'b-storage-method'; ms.textContent = m;
+      const ds = doc.createElement('span'); ds.className = 'b-storage-dur';    ds.textContent = d;
+      el.appendChild(ms); el.appendChild(ds); return el;
+    }));
+
+    const cn = doc.querySelector('.b-chefs-note');
+    if (cn) cn.textContent = document.getElementById('df-chefs-note').value.trim();
+
+    const card = doc.querySelector('.flip-card');
+    return card ? card.outerHTML : originalHtml;
+  }
+
   async function submitDirectEdit() {
-    const cardId  = document.getElementById('edit-card-id').value;
-    const newHtml = document.getElementById('direct-edit-html').value;
-    const btn     = document.getElementById('direct-edit-btn');
+    const cardId = document.getElementById('edit-card-id').value;
+    const btn    = document.getElementById('direct-edit-btn');
 
     btn.disabled    = true;
     btn.textContent = 'Saving…';
     document.getElementById('edit-modal-status').style.display = 'none';
 
     try {
+      const newHtml = buildCardHtmlFromForm();
       const res = await fetch('/api/save-card-html', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1442,10 +1737,20 @@
   let chatHistory = [];
   let chatOpen    = false;
 
+  // Fallback for browsers that don't support 100dvh: resize the chat panel
+  // to match the visual viewport height so the input stays above the keyboard.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      const panel = document.getElementById('chat-panel');
+      if (chatOpen) panel.style.height = window.visualViewport.height + 'px';
+    });
+  }
+
   function toggleChat() {
     chatOpen = !chatOpen;
     const panel = document.getElementById('chat-panel');
     panel.classList.toggle('open', chatOpen);
+    if (!chatOpen) panel.style.height = ''; // reset any JS-set height on close
     if (chatOpen) document.getElementById('chat-input').focus();
   }
 
