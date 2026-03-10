@@ -247,6 +247,20 @@
     .empty-emoji { font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.3; }
     .empty-title { font-family: 'Playfair Display', serif; font-size: 1.3rem; margin-bottom: 0.4rem; }
     .empty-sub   { font-size: 0.87rem; }
+    .empty-cta-btn {
+      display: inline-block;
+      margin-top: 1.2rem;
+      background: none;
+      border: 1.5px solid var(--tan-dark);
+      color: var(--brown);
+      padding: 0.5rem 1.4rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .empty-cta-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-faint); }
 
     /* ── Flip card grid ───────────────────────────────────── */
     .card-grid {
@@ -512,6 +526,18 @@
     .b-ing-name { color: rgba(232,221,208,0.82); }
     .b-ing-amt  { color: var(--white); font-weight: 700; font-size: 0.74rem; padding-left: 0.5rem; flex-shrink: 0; }
 
+    /* ── Ingredient checkboxes (cooking mode) ─────────────── */
+    .ing-check {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      margin-right: 0.5rem;
+      accent-color: var(--red);
+      cursor: pointer;
+    }
+    .b-ing-row.ing-checked { opacity: 0.4; }
+    .b-ing-row.ing-checked .b-ing-name { text-decoration: line-through; }
+
     .b-step {
       display: flex;
       gap: 0.75rem;
@@ -602,6 +628,9 @@
       .nav-links { display: none; }
       .flip-card { height: 520px; }
       .b-notes-grid { grid-template-columns: 1fr; }
+      /* Shorter hero on phones so recipes are visible sooner */
+      .hero { min-height: unset; padding: 2.5rem 1.5rem 2rem; }
+      .hero-title { font-size: clamp(2.4rem, 12vw, 4rem); line-height: 1; }
     }
 
     /* ── Edit Button (on card front) ─────────────────────── */
@@ -808,6 +837,22 @@
     }
     #edit-recipe-modal textarea:focus { border-color: var(--red); }
     #direct-edit-html { display: none; }
+
+    /* Style all text inputs inside the edit modal (for the Direct Edit structured form) */
+    #edit-recipe-modal input[type="text"],
+    #edit-recipe-modal select {
+      width: 100%;
+      border: 1px solid var(--tan-dark);
+      border-radius: 6px;
+      padding: 0.62rem 0.75rem;
+      font-size: 0.9rem;
+      font-family: 'Lato', sans-serif;
+      background: var(--white);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #edit-recipe-modal input[type="text"]:focus { border-color: var(--red); }
 
     /* ── Direct Edit Structured Form ───────────────────────── */
     .df-section { margin-bottom: 1rem; }
@@ -1036,6 +1081,56 @@
     }
     .chat-send-btn:hover:not(:disabled) { background: var(--red-light); }
     .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Nav search bar ───────────────────────────────────── */
+    .nav-search {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(201,185,154,0.2);
+      border-radius: 4px;
+      padding: 0.32rem 0.75rem;
+      color: var(--tan);
+      font-size: 0.78rem;
+      font-family: 'Lato', sans-serif;
+      outline: none;
+      width: 150px;
+      transition: width 0.2s, border-color 0.2s;
+    }
+    .nav-search::placeholder { color: var(--tan-dark); }
+    .nav-search:focus { border-color: var(--red); width: 200px; }
+    @media (max-width: 600px) { .nav-search { display: none; } }
+
+    /* ── Mobile navigation bar ────────────────────────────── */
+    .mobile-nav-bar { display: none; } /* hidden on desktop */
+    @media (max-width: 600px) {
+      .mobile-nav-bar {
+        display: flex;
+        overflow-x: auto;
+        gap: 0.5rem;
+        padding: 0.6rem 1rem;
+        background: var(--brown);
+        position: sticky;
+        top: 58px; /* sits directly below the 58px main nav */
+        z-index: 99;
+        scrollbar-width: none;
+      }
+      .mobile-nav-bar::-webkit-scrollbar { display: none; }
+      .mobile-nav-bar a {
+        flex-shrink: 0;
+        color: var(--tan);
+        text-decoration: none;
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 0.32rem 0.75rem;
+        border-radius: 100px;
+        border: 1px solid rgba(201,185,154,0.3);
+        white-space: nowrap;
+        transition: background 0.2s, color 0.2s;
+      }
+      .mobile-nav-bar a:hover,
+      .mobile-nav-bar a:active { background: var(--red); color: var(--white); border-color: var(--red); }
+    }
   </style>
 </head>
 <body>
@@ -1051,7 +1146,19 @@
     <li><a href="#breakfast">Breakfast</a></li>
     <li><a href="#desserts">Desserts</a></li>
   </ul>
+  <input class="nav-search" id="recipe-search" type="search"
+    placeholder="Search recipes…" aria-label="Search recipes" autocomplete="off">
   <button class="nav-add-btn" onclick="document.getElementById('add-recipe-modal').style.display='flex'">+ Add Recipe</button>
+</nav>
+
+<!-- Mobile-only scrollable category bar, sticks below the main nav on phones -->
+<nav class="mobile-nav-bar" aria-label="Jump to section">
+  <a href="#appetizers">🥗 Appetizers</a>
+  <a href="#entrees">🍽️ Entrées</a>
+  <a href="#sides">🥦 Sides</a>
+  <a href="#snacks">🍿 Snacks</a>
+  <a href="#breakfast">🍳 Breakfast</a>
+  <a href="#desserts">🍪 Desserts</a>
 </nav>
 
 <!-- Hero -->
@@ -1305,7 +1412,7 @@
       </select>
 
       <label class="modal-label" for="recipe-author">Your Name</label>
-      <input type="text" id="recipe-author" name="authorName" placeholder="e.g. Caleb" required maxlength="40" autocomplete="off" />
+      <input type="text" id="recipe-author" name="authorName" placeholder="e.g. Caleb" required maxlength="40" autocomplete="given-name" />
 
       <label class="modal-label" for="recipe-input">Recipe</label>
       <textarea id="recipe-input" name="recipeInput" rows="9"
@@ -1344,6 +1451,13 @@
   // ── Flip cards ──────────────────────────────────────────
   function toggleFlip(cardEl) {
     cardEl.classList.toggle('flipped');
+    // Reset ingredient checkboxes when flipping back to the front
+    if (!cardEl.classList.contains('flipped')) {
+      cardEl.querySelectorAll('.ing-check').forEach(cb => {
+        cb.checked = false;
+        cb.closest('.b-ing-row').classList.remove('ing-checked');
+      });
+    }
   }
 
   // ── Add Recipe ──────────────────────────────────────────
@@ -1374,6 +1488,7 @@
       status.style.display = 'block';
       status.style.color   = '#2a7a2a';
       status.textContent   = '✓ Recipe added! Refreshing page…';
+      localStorage.setItem('wfc_author', form.authorName.value.trim());
       setTimeout(() => window.location.reload(), 2000);
 
     } catch (err) {
@@ -1804,6 +1919,63 @@
       input.focus();
     }
   }
+
+  // ── Page-load enhancements ───────────────────────────────
+
+  // B: Pre-fill author name from the last successful submission
+  (function () {
+    const saved = localStorage.getItem('wfc_author');
+    if (saved) document.getElementById('recipe-author').value = saved;
+  })();
+
+  // C: Keyboard accessibility — let keyboard users flip cards with Enter/Space
+  document.querySelectorAll('.flip-card').forEach(card => {
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+    const title = card.querySelector('.front-title')?.textContent.trim() ?? 'Recipe';
+    card.setAttribute('aria-label', title + ' — press Enter to flip');
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFlip(card); }
+      if (e.key === 'Escape' && card.classList.contains('flipped')) { card.classList.remove('flipped'); }
+    });
+  });
+
+  // E: Add "Add the first recipe" CTA to every empty section
+  document.querySelectorAll('.empty-state').forEach(el => {
+    const btn = document.createElement('button');
+    btn.className = 'empty-cta-btn';
+    btn.textContent = '+ Add the first recipe';
+    btn.onclick = () => { document.getElementById('add-recipe-modal').style.display = 'flex'; };
+    el.appendChild(btn);
+  });
+
+  // H: Client-side recipe search — filters cards by title, hides empty sections
+  function filterRecipes(query) {
+    const q = query.toLowerCase().trim();
+    document.querySelectorAll('.flip-card').forEach(card => {
+      const title = card.querySelector('.front-title')?.textContent.toLowerCase() ?? '';
+      card.style.display = (!q || title.includes(q)) ? '' : 'none';
+    });
+    // Hide/show entire sections based on whether any cards match
+    document.querySelectorAll('section[id]').forEach(section => {
+      if (!q) { section.style.display = ''; return; }
+      const hasMatch = [...section.querySelectorAll('.flip-card')]
+        .some(c => c.style.display !== 'none');
+      section.style.display = hasMatch ? '' : 'none';
+    });
+  }
+  document.getElementById('recipe-search')?.addEventListener('input', e => filterRecipes(e.target.value));
+
+  // I: Ingredient checkboxes — check off ingredients while cooking
+  document.querySelectorAll('.b-ing-row').forEach(row => {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'ing-check';
+    cb.setAttribute('aria-label', 'Mark ingredient done');
+    cb.addEventListener('change', () => row.classList.toggle('ing-checked', cb.checked));
+    cb.addEventListener('click', e => e.stopPropagation()); // don't flip the card
+    row.insertBefore(cb, row.firstChild);
+  });
 </script>
 
 </body>
