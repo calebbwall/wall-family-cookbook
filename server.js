@@ -1,9 +1,22 @@
 /**
  * Wall Family Cookbook — Express Server
  *
+ * Architecture:
+ *   - Serves public/ as static files (style.css, app.js)
+ *   - Dynamically builds pages by injecting recipe cards into public/index.html template
+ *   - Stores recipes in PostgreSQL (card_html column = full flip-card HTML blob)
+ *   - Uses Google Gemini AI to format recipe text/URLs into card HTML
+ *
  * SETUP (Replit Secrets tab — never put these in code):
  *   GEMINI_API_KEY  → Get from https://aistudio.google.com (free tier available)
  *   DATABASE_URL    → Auto-provisioned by Replit PostgreSQL
+ *   PASSPHRASE      → Family passphrase to access the site (default: Joe+Linda)
+ *
+ * File structure:
+ *   server.js         ← this file (Express server, ~900 lines)
+ *   public/index.html ← HTML template with <!-- SECTION_START/END --> markers
+ *   public/style.css  ← all CSS (extracted for clean separation)
+ *   public/app.js     ← all client-side JS (extracted for clean separation)
  */
 
 import express from 'express';
@@ -15,7 +28,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import pg from 'pg';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
-const HTML_PATH  = path.join(__dirname, 'index.html');
+const HTML_PATH  = path.join(__dirname, 'public', 'index.html');
 const PORT       = process.env.PORT || 5000;
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
@@ -655,7 +668,7 @@ app.get(['/', '/index.html'], requireAuth, async (req, res) => {
 
 // ── Static assets (unprotected — fonts, icons, etc.) ─────────────────────────
 
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Protected API routes ──────────────────────────────────────────────────────
 

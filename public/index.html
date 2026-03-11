@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wall Family Cookbook</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <a href="#top" class="nav-brand">Wall Family Cookbook</a>
+  <ul class="nav-links">
+    <li><a href="#appetizers">Appetizers</a></li>
+    <li><a href="#entrees">Entrées</a></li>
+    <li><a href="#sides">Sides</a></li>
+    <li><a href="#snacks">Snacks</a></li>
+    <li><a href="#breakfast">Breakfast</a></li>
+    <li><a href="#desserts">Desserts</a></li>
+  </ul>
+  <input class="nav-search" id="recipe-search" type="search"
+    placeholder="Search recipes…" aria-label="Search recipes" autocomplete="off">
+  <button class="nav-add-btn" onclick="document.getElementById('add-recipe-modal').style.display='flex'">+ Add Recipe</button>
+</nav>
+
+<!-- Mobile-only scrollable category bar, sticks below the main nav on phones -->
+<nav class="mobile-nav-bar" aria-label="Jump to section">
+  <a href="#appetizers">🥗 Appetizers</a>
+  <a href="#entrees">🍽️ Entrées</a>
+  <a href="#sides">🥦 Sides</a>
+  <a href="#snacks">🍿 Snacks</a>
+  <a href="#breakfast">🍳 Breakfast</a>
+  <a href="#desserts">🍪 Desserts</a>
+</nav>
+
+<!-- Hero -->
+<header class="hero" id="top">
+  <div class="hero-content">
+    <p class="hero-eyebrow">A Family Recipe Collection</p>
+    <h1 class="hero-title">
+      Wall Family
+      <em>Cookbook</em>
+    </h1>
+    <div class="hero-rule"></div>
+    <p class="hero-tagline">
+      Recipes passed down, cooked with love, and always improving.<br>
+      Every dish tells a story worth sharing at the table.
+    </p>
+    <div class="hero-pills">
+      <a href="#appetizers" class="pill">Appetizers</a>
+      <a href="#entrees"    class="pill">Entrées</a>
+      <a href="#sides"      class="pill">Sides</a>
+      <a href="#snacks"     class="pill">Snacks</a>
+      <a href="#breakfast"  class="pill">Breakfast</a>
+      <a href="#desserts"   class="pill">Desserts</a>
+    </div>
+  </div>
+</header>
+
+<!-- Appetizers -->
+<section id="appetizers" class="section">
+  <div class="section-header">
+    <span class="section-icon">🥗</span>
+    <h2 class="section-title">Appetizers</h2>
+    <span class="section-count" id="count-appetizers">0 recipes</span>
+  </div>
+  <!-- APPETIZERS_START -->
+  <!-- APPETIZERS_END -->
+  <div class="empty-state" id="empty-appetizers">
+    <div class="empty-emoji">🥗</div>
+    <p class="empty-title">No appetizers yet</p>
+    <p class="empty-sub">Wall family starters coming soon.</p>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Entrées -->
+<section id="entrees" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍽️</span>
+    <h2 class="section-title">Entrées</h2>
+    <span class="section-count" id="count-entrees">0 recipes</span>
+  </div>
+  <!-- ENTREES_START -->
+  <!-- ENTREES_END -->
+  <div class="empty-state" id="empty-entrees">
+    <div class="empty-emoji">🍽️</div>
+    <p class="empty-title">No entrées yet</p>
+    <p class="empty-sub">Main courses coming soon.</p>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Sides -->
+<section id="sides" class="section">
+  <div class="section-header">
+    <span class="section-icon">🥦</span>
+    <h2 class="section-title">Sides</h2>
+    <span class="section-count" id="count-sides">0 recipes</span>
+  </div>
+  <!-- SIDES_START -->
+  <!-- SIDES_END -->
+  <div class="empty-state" id="empty-sides">
+    <div class="empty-emoji">🥦</div>
+    <p class="empty-title">No sides yet</p>
+    <p class="empty-sub">Side dishes coming soon.</p>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Snacks -->
+<section id="snacks" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍿</span>
+    <h2 class="section-title">Snacks</h2>
+    <span class="section-count" id="count-snacks">0 recipes</span>
+  </div>
+  <!-- SNACKS_START -->
+  <!-- SNACKS_END -->
+  <div class="empty-state" id="empty-snacks">
+    <div class="empty-emoji">🍿</div>
+    <p class="empty-title">No snacks yet</p>
+    <p class="empty-sub">Snack recipes coming soon.</p>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Breakfast -->
+<section id="breakfast" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍳</span>
+    <h2 class="section-title">Breakfast</h2>
+    <span class="section-count" id="count-breakfast">0 recipes</span>
+  </div>
+  <!-- BREAKFAST_START -->
+  <!-- BREAKFAST_END -->
+  <div class="empty-state" id="empty-breakfast">
+    <div class="empty-emoji">🍳</div>
+    <p class="empty-title">No breakfast recipes yet</p>
+    <p class="empty-sub">Morning favorites coming soon.</p>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Desserts -->
+<section id="desserts" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍪</span>
+    <h2 class="section-title">Desserts</h2>
+    <span class="section-count" id="count-desserts">0 recipes</span>
+  </div>
+  <!-- DESSERTS_START -->
+  <!-- DESSERTS_END -->
+  <div class="empty-state" id="empty-desserts">
+    <div class="empty-emoji">🍪</div>
+    <p class="empty-title">No desserts yet</p>
+    <p class="empty-sub">Sweet treats coming soon.</p>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <strong>Wall Family Cookbook</strong>
+  Recipes passed down, cooked with love, and always improving.<br>
+  Hit <strong style="font-family:Lato,sans-serif;font-size:0.82rem;color:var(--tan-dark);display:inline">+ Add Recipe</strong> to share yours.
+  <br><br>
+  <a href="/api/logout" style="color:var(--muted);font-size:0.75rem;text-decoration:none;opacity:0.6;">Sign out</a>
+</footer>
+
+<!-- Edit Recipe Modal -->
+<div id="edit-recipe-modal" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeEditModal()" title="Close">✕</button>
+    <h2 class="modal-title">Edit Recipe</h2>
+    <input type="hidden" id="edit-card-id" value="">
+
+    <div class="edit-tabs">
+      <button class="edit-tab active" onclick="switchEditTab('ai')" data-tab="ai">AI Edit</button>
+      <button class="edit-tab" onclick="switchEditTab('direct')" data-tab="direct">Direct Edit</button>
+      <button class="edit-tab edit-tab-delete" onclick="switchEditTab('delete')" data-tab="delete">Delete</button>
+    </div>
+
+    <div id="edit-pane-ai" class="edit-pane active">
+      <p class="modal-sub">Describe what to change — AI will regenerate the card.</p>
+      <form onsubmit="submitAiEdit(event)">
+        <label class="modal-label" for="edit-instructions">What to Change</label>
+        <textarea id="edit-instructions" rows="4" maxlength="500" required
+          placeholder="e.g. Change the baking temp to 375°F and add a note about using orange blossom honey…"></textarea>
+        <button type="submit" class="modal-submit" id="ai-edit-btn">Update with AI</button>
+      </form>
+    </div>
+
+    <div id="edit-pane-direct" class="edit-pane">
+      <!-- Hidden — keeps raw HTML for parsing; populated by openEditModal fetch -->
+      <textarea id="direct-edit-html" spellcheck="false"></textarea>
+
+      <div class="df-section">
+        <div class="df-row-2">
+          <div><label class="df-label">Emoji</label><input id="df-emoji" type="text" maxlength="8" placeholder="🍕"></div>
+          <div><label class="df-label">Badge</label><input id="df-badge" type="text" placeholder="Pizza · Italian"></div>
+        </div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Title</label>
+        <input id="df-title" type="text" placeholder="Recipe title">
+      </div>
+      <div class="df-section">
+        <label class="df-label">Subtitle</label>
+        <input id="df-sub" type="text" placeholder="Short subtitle or source">
+      </div>
+      <div class="df-section">
+        <label class="df-label">Info chips (4 small tags on the front)</label>
+        <div class="df-chips-grid">
+          <input id="df-chip-0" type="text" placeholder="e.g. 8 servings">
+          <input id="df-chip-1" type="text" placeholder="e.g. 425°F">
+          <input id="df-chip-2" type="text" placeholder="e.g. 45 min">
+          <input id="df-chip-3" type="text" placeholder="e.g. Crispy">
+        </div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Stats (3 boxes on the back)</label>
+        <div id="df-stats"></div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Ingredients</label>
+        <div id="df-ingredients"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddIngredient('','')">+ Add ingredient</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Steps</label>
+        <div id="df-steps"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddStep('','')">+ Add step</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Calibration notes <span style="font-weight:400;text-transform:none">(tips for tweaking the recipe)</span></label>
+        <div id="df-notes"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddNote('','')">+ Add note</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Storage</label>
+        <div id="df-storage"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddStorage('','')">+ Add storage option</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Chef's note</label>
+        <textarea id="df-chefs-note" placeholder="One key tip or secret…"></textarea>
+      </div>
+
+      <button class="modal-submit" onclick="submitDirectEdit()" id="direct-edit-btn">Save Changes</button>
+    </div>
+
+    <div id="edit-pane-delete" class="edit-pane">
+      <div class="delete-warning">
+        <p>You are about to permanently delete:</p>
+        <p class="delete-recipe-name" id="delete-recipe-name"></p>
+        <p style="margin-top:0.6rem;font-size:0.82rem;color:#b91c1c;">This cannot be undone.</p>
+      </div>
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;font-size:0.88rem;color:#991b1b;cursor:pointer;">
+        <input type="checkbox" id="delete-confirm-check" onchange="document.getElementById('delete-btn').disabled=!this.checked">
+        Yes, I want to delete this recipe
+      </label>
+      <button class="delete-confirm-btn" onclick="submitDelete()" id="delete-btn" disabled>Delete Recipe</button>
+    </div>
+
+    <p id="edit-modal-status"></p>
+  </div>
+</div>
+
+<!-- Add Recipe Modal -->
+<div id="add-recipe-modal" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('add-recipe-modal').style.display='none'" title="Close">✕</button>
+    <h2 class="modal-title">Add a Recipe</h2>
+    <p class="modal-sub">Paste recipe text or a link — AI handles the formatting.</p>
+
+    <form id="recipe-form" onsubmit="submitRecipe(event)">
+      <label class="modal-label" for="recipe-category">Category</label>
+      <select id="recipe-category" name="category" required>
+        <option value="">Choose a category…</option>
+        <option value="appetizer">Appetizer</option>
+        <option value="entree">Entrée / Lunch</option>
+        <option value="side">Side Dish</option>
+        <option value="snack">Snack</option>
+        <option value="breakfast">Breakfast</option>
+        <option value="dessert">Dessert</option>
+      </select>
+
+      <label class="modal-label" for="recipe-author">Your Name</label>
+      <input type="text" id="recipe-author" name="authorName" placeholder="e.g. Caleb" required maxlength="40" autocomplete="given-name" />
+
+      <label class="modal-label" for="recipe-input">Recipe</label>
+      <textarea id="recipe-input" name="recipeInput" rows="9"
+        placeholder="Paste the full recipe here, or paste a URL to a recipe page…"
+        required maxlength="12000"></textarea>
+
+      <button type="submit" class="modal-submit" id="submit-btn">Add to Cookbook</button>
+      <p id="modal-status"></p>
+    </form>
+  </div>
+</div>
+
+<!-- Chat FAB -->
+<button class="chat-fab" onclick="toggleChat()" title="Chat about recipes" aria-label="Open recipe chat">💬</button>
+
+<!-- Chat Panel -->
+<div class="chat-panel" id="chat-panel" role="complementary" aria-label="Recipe chat">
+  <div class="chat-panel-header">
+    <span class="chat-panel-title">📖 Recipe Assistant</span>
+    <button class="chat-panel-close" onclick="toggleChat()" title="Close">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg chat-msg-assistant">
+      Hi! Ask me anything about our cookbook — what to make tonight, substitutions, techniques, or any recipe questions.
+    </div>
+  </div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chat-input" placeholder="Ask about a recipe…" rows="1" maxlength="500"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+    <button class="chat-send-btn" id="chat-send-btn" onclick="sendChat()" title="Send">➤</button>
+  </div>
+</div>
+
+<!-- Back-to-top button (appears after scrolling down) -->
+<button id="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

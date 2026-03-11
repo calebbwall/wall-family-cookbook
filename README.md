@@ -90,11 +90,19 @@ Open `http://localhost:5000`.
 ### Architecture
 
 ```
-server.js       Express backend — auth, API routes, AI calls, DB queries, page assembly
-index.html      Entire frontend — HTML structure, embedded CSS (~900 lines), vanilla JS (~450 lines)
-package.json    Dependencies: express, @google/generative-ai, pg
-ROADMAP.md      Full development roadmap and improvement plan
+server.js             Express backend — auth, API routes, AI calls, DB queries, page assembly
+public/index.html     HTML template — clean structure with <!-- SECTION_START/END --> markers
+public/style.css      All CSS — recipe cards, modals, chat panel, mobile layout
+public/app.js         All client-side JS — modals, flipping, search, chat, form submission
+package.json          Dependencies: express, @google/generative-ai, pg
+ROADMAP.md            Full development roadmap and improvement plan
 ```
+
+**How page rendering works:**
+The server reads `public/index.html` as a template on each request, queries all recipes from
+PostgreSQL, and injects the recipe card HTML between `<!-- SECTION_START -->` and
+`<!-- SECTION_END -->` comment markers. The browser then loads `style.css` and `app.js`
+as static files from the `public/` directory.
 
 ### Development Workflow
 
