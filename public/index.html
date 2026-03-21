@@ -311,18 +311,6 @@
         placeholder="Paste the full recipe here, or paste a URL to a recipe page…"
         required maxlength="12000"></textarea>
 
-      <label class="modal-label">Photo (optional)</label>
-      <div class="media-input-row">
-        <button type="button" class="media-upload-btn" onclick="document.getElementById('add-photo-file').click()">📷 Upload Photo</button>
-        <input type="text" id="add-media-url" placeholder="or paste image / Instagram URL…" autocomplete="off" style="flex:1;min-width:0" oninput="handleAddMediaUrl(this.value)">
-      </div>
-      <input type="file" id="add-photo-file" accept="image/*" style="display:none" onchange="handleAddPhotoFile(this)">
-      <div class="media-preview-wrap" id="add-media-preview">
-        <img class="media-preview-img" id="add-media-preview-img" src="" alt="">
-        <div class="media-preview-instagram" id="add-media-preview-ig">📷 Instagram link added</div>
-        <button type="button" class="media-clear-btn" onclick="clearAddMedia()" title="Remove">✕</button>
-      </div>
-
       <button type="submit" class="modal-submit" id="submit-btn">Add to Cookbook</button>
       <p id="modal-status"></p>
     </form>

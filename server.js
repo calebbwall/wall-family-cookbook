@@ -723,12 +723,24 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
     if (!authorName || authorName.trim().length < 1 || authorName.trim().length > 40) {
       return res.status(400).json({ error: 'Please enter your name (max 40 characters)' });
     }
-    const isLink = /^https?:\/\/.+/i.test((recipeInput || '').trim());
-    if (!recipeInput || (!isLink && recipeInput.trim().length < 20)) {
+    // Auto-detect Instagram or image URLs embedded in the recipe text and extract them as media
+    const MEDIA_URL_RE = /https?:\/\/\S*instagram\.com\/(?:p|reel|tv)\/[^\s"<>]+|https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|avif)(?:\?[^\s"<>]*)?/gi;
+    let recipeText = (recipeInput || '').trim();
+    let detectedMediaUrl = '';
+    const mediaMatch = recipeText.match(MEDIA_URL_RE);
+    if (mediaMatch) {
+      detectedMediaUrl = mediaMatch[0];
+      recipeText = recipeText.replace(detectedMediaUrl, '').trim();
+    }
+
+    const isLink = /^https?:\/\/.+/i.test(recipeText);
+    if (!recipeText || (!isLink && recipeText.length < 20)) {
+      if (detectedMediaUrl) {
+        return res.status(400).json({ error: 'Got your link! Now paste the recipe text alongside it and we\'ll attach the photo to the card.' });
+      }
       return res.status(400).json({ error: 'Recipe is too short — please paste more detail' });
     }
 
-    let recipeText = recipeInput.trim();
     const isUrl = /^https?:\/\/.+/i.test(recipeText);
 
     if (isUrl) {
@@ -751,10 +763,9 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
       cardHtml = await generateCardHtml(prompt);
     }
 
-    // Inject photo/Instagram if provided
-    if (mediaUrl && /^https?:\/\//i.test(mediaUrl.trim())) {
-      cardHtml = injectMedia(cardHtml, mediaUrl.trim());
-    }
+    // Inject photo/Instagram — prefer auto-detected URL, fall back to explicit mediaUrl body field
+    const finalMediaUrl = detectedMediaUrl || (mediaUrl && /^https?:\/\//i.test(mediaUrl) ? mediaUrl.trim() : '');
+    if (finalMediaUrl) cardHtml = injectMedia(cardHtml, finalMediaUrl);
 
     await pool.query(
       `INSERT INTO recipes (category, author_name, card_html, card_id) VALUES ($1, $2, $3, $4)`,

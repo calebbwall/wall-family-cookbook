@@ -16,48 +16,7 @@
 
 // ── Media state ──────────────────────────────────────────────────
 const INSTAGRAM_RE = /instagram\.com\/(p|reel|tv)\//i;
-let _addMediaUrl = ''; // resolved URL for Add Recipe modal
-let _dfMediaUrl  = ''; // resolved URL for Direct Edit form
-
-// Add Recipe modal — media helpers
-async function handleAddPhotoFile(input) {
-  if (!input.files || !input.files[0]) return;
-  const form = new FormData();
-  form.append('photo', input.files[0]);
-  try {
-    const res  = await fetch('/api/upload-media', { method: 'POST', body: form });
-    const data = await res.json();
-    if (!res.ok) { alert(data.error || 'Upload failed'); return; }
-    _addMediaUrl = data.url;
-    document.getElementById('add-media-url').value = '';
-    _renderAddMediaPreview(data.url);
-  } catch { alert('Upload failed — please try again'); }
-}
-
-function handleAddMediaUrl(val) {
-  _addMediaUrl = val.trim();
-  _renderAddMediaPreview(_addMediaUrl);
-}
-
-function _renderAddMediaPreview(url) {
-  const wrap = document.getElementById('add-media-preview');
-  const img  = document.getElementById('add-media-preview-img');
-  const ig   = document.getElementById('add-media-preview-ig');
-  if (!url) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
-  if (INSTAGRAM_RE.test(url)) {
-    img.style.display = 'none'; ig.style.display = 'flex';
-  } else {
-    ig.style.display = 'none'; img.src = url; img.style.display = 'block';
-  }
-}
-
-function clearAddMedia() {
-  _addMediaUrl = '';
-  document.getElementById('add-media-url').value = '';
-  document.getElementById('add-photo-file').value = '';
-  document.getElementById('add-media-preview').style.display = 'none';
-}
+let _dfMediaUrl = ''; // resolved URL for Direct Edit form
 
 // Direct Edit form — media helpers
 async function handleDfPhotoFile(input) {
@@ -131,7 +90,6 @@ async function submitRecipe(event) {
         category:    form.category.value,
         authorName:  form.authorName.value.trim(),
         recipeInput: form.recipeInput.value.trim(),
-        mediaUrl:    _addMediaUrl || '',
       }),
     });
     const data = await res.json();
@@ -141,7 +99,6 @@ async function submitRecipe(event) {
     status.style.color   = '#2a7a2a';
     status.textContent   = '✓ Recipe added! Refreshing page…';
     localStorage.setItem('wfc_author', form.authorName.value.trim());
-    clearAddMedia();
     setTimeout(() => window.location.reload(), 2000);
 
   } catch (err) {
