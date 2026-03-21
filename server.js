@@ -26,12 +26,30 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import pg from 'pg';
+import multer from 'multer';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const HTML_PATH  = path.join(__dirname, 'public', 'index.html');
 const PORT       = process.env.PORT || 5000;
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+// ── Media uploads ──────────────────────────────────────────────────────────────
+
+const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+await fs.mkdir(UPLOADS_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename:    (_req, file,  cb) => {
+      const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '') || '.jpg';
+      cb(null, crypto.randomUUID() + ext);
+    },
+  }),
+  limits:     { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (_req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
+});
 
 // Template HTML — loaded once at startup, never modified on disk
 let templateHtml = null;
@@ -391,7 +409,7 @@ const CARD_TEMPLATE = (cardId, authorName) => `<div class="flip-card" id="${card
 
     <div class="flip-front">
       <div class="front-img">
-        [ONE EMOJI REPRESENTING THE DISH]
+        <span class="front-emoji">[ONE EMOJI REPRESENTING THE DISH]</span>
         <button class="front-edit-btn" onclick="event.stopPropagation(); openEditModal('${cardId}')" title="Edit recipe">✏️</button>
         <span class="front-badge">[Dish Type · Category]</span>
         <span class="front-hint">↻ Tap to see recipe</span>
@@ -601,6 +619,24 @@ function stripCardToText(cardHtml) {
     .trim();
 }
 
+// ── Media injector ────────────────────────────────────────────────────────────
+
+function injectMedia(cardHtml, mediaUrl) {
+  if (!mediaUrl) return cardHtml;
+  try { new URL(mediaUrl); } catch { return cardHtml; }
+
+  const safe = mediaUrl.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E');
+  const isInstagram = /instagram\.com\/(p|reel|tv)\//i.test(mediaUrl);
+
+  if (isInstagram) {
+    const overlay = `<a class="front-instagram" href="${safe}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">📷 Instagram</a>`;
+    return cardHtml.replace(/(<div class="front-img">)/, `$1${overlay}`);
+  } else {
+    const img = `<img class="front-photo" src="${safe}" alt="Recipe photo" loading="lazy" onerror="this.remove()">`;
+    return cardHtml.replace(/(<div class="front-img">)/, `$1${img}`);
+  }
+}
+
 // ── Recipe catalog builder (for chat) ────────────────────────────────────────
 
 function buildRecipeCatalog(rows) {
@@ -672,9 +708,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Protected API routes ──────────────────────────────────────────────────────
 
+app.post('/api/upload-media', requireAuth, upload.single('photo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No valid image file provided (max 5 MB, images only)' });
+  res.json({ url: '/uploads/' + req.file.filename });
+});
+
 app.post('/api/add-recipe', requireAuth, async (req, res) => {
   try {
-    const { category, authorName, recipeInput } = req.body || {};
+    const { category, authorName, recipeInput, mediaUrl } = req.body || {};
 
     if (!SECTION_MAP[category]) {
       return res.status(400).json({ error: 'Invalid category selected' });
@@ -708,6 +749,11 @@ app.post('/api/add-recipe', requireAuth, async (req, res) => {
     } else {
       const prompt = buildPrompt(recipeText, category, authorName.trim(), cardId);
       cardHtml = await generateCardHtml(prompt);
+    }
+
+    // Inject photo/Instagram if provided
+    if (mediaUrl && /^https?:\/\//i.test(mediaUrl.trim())) {
+      cardHtml = injectMedia(cardHtml, mediaUrl.trim());
     }
 
     await pool.query(

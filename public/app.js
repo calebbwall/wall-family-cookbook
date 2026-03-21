@@ -14,6 +14,91 @@
  *   - Page-load init
  */
 
+// ── Media state ──────────────────────────────────────────────────
+const INSTAGRAM_RE = /instagram\.com\/(p|reel|tv)\//i;
+let _addMediaUrl = ''; // resolved URL for Add Recipe modal
+let _dfMediaUrl  = ''; // resolved URL for Direct Edit form
+
+// Add Recipe modal — media helpers
+async function handleAddPhotoFile(input) {
+  if (!input.files || !input.files[0]) return;
+  const form = new FormData();
+  form.append('photo', input.files[0]);
+  try {
+    const res  = await fetch('/api/upload-media', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Upload failed'); return; }
+    _addMediaUrl = data.url;
+    document.getElementById('add-media-url').value = '';
+    _renderAddMediaPreview(data.url);
+  } catch { alert('Upload failed — please try again'); }
+}
+
+function handleAddMediaUrl(val) {
+  _addMediaUrl = val.trim();
+  _renderAddMediaPreview(_addMediaUrl);
+}
+
+function _renderAddMediaPreview(url) {
+  const wrap = document.getElementById('add-media-preview');
+  const img  = document.getElementById('add-media-preview-img');
+  const ig   = document.getElementById('add-media-preview-ig');
+  if (!url) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if (INSTAGRAM_RE.test(url)) {
+    img.style.display = 'none'; ig.style.display = 'flex';
+  } else {
+    ig.style.display = 'none'; img.src = url; img.style.display = 'block';
+  }
+}
+
+function clearAddMedia() {
+  _addMediaUrl = '';
+  document.getElementById('add-media-url').value = '';
+  document.getElementById('add-photo-file').value = '';
+  document.getElementById('add-media-preview').style.display = 'none';
+}
+
+// Direct Edit form — media helpers
+async function handleDfPhotoFile(input) {
+  if (!input.files || !input.files[0]) return;
+  const form = new FormData();
+  form.append('photo', input.files[0]);
+  try {
+    const res  = await fetch('/api/upload-media', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Upload failed'); return; }
+    _dfMediaUrl = data.url;
+    document.getElementById('df-media-url').value = '';
+    _renderDfMediaPreview(data.url);
+  } catch { alert('Upload failed — please try again'); }
+}
+
+function handleDfMediaUrl(val) {
+  _dfMediaUrl = val.trim();
+  _renderDfMediaPreview(_dfMediaUrl);
+}
+
+function _renderDfMediaPreview(url) {
+  const wrap = document.getElementById('df-media-preview');
+  const img  = document.getElementById('df-media-preview-img');
+  const ig   = document.getElementById('df-media-preview-ig');
+  if (!url) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if (INSTAGRAM_RE.test(url)) {
+    img.style.display = 'none'; ig.style.display = 'flex';
+  } else {
+    ig.style.display = 'none'; img.src = url; img.style.display = 'block';
+  }
+}
+
+function clearDfMedia() {
+  _dfMediaUrl = '';
+  document.getElementById('df-media-url').value = '';
+  document.getElementById('df-photo-file').value = '';
+  document.getElementById('df-media-preview').style.display = 'none';
+}
+
 // ── Card flipping ────────────────────────────────────────────────
 function toggleFlip(cardEl) {
   cardEl.classList.toggle('flipped');
@@ -46,6 +131,7 @@ async function submitRecipe(event) {
         category:    form.category.value,
         authorName:  form.authorName.value.trim(),
         recipeInput: form.recipeInput.value.trim(),
+        mediaUrl:    _addMediaUrl || '',
       }),
     });
     const data = await res.json();
@@ -55,6 +141,7 @@ async function submitRecipe(event) {
     status.style.color   = '#2a7a2a';
     status.textContent   = '✓ Recipe added! Refreshing page…';
     localStorage.setItem('wfc_author', form.authorName.value.trim());
+    clearAddMedia();
     setTimeout(() => window.location.reload(), 2000);
 
   } catch (err) {
@@ -160,10 +247,20 @@ async function submitAiEdit(event) {
 function populateDirectForm(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
-  // Emoji — first text node inside .front-img
-  let emoji = '';
+  // Existing photo / Instagram link
   const frontImg = doc.querySelector('.front-img');
-  if (frontImg) {
+  const existingPhoto = frontImg?.querySelector('.front-photo');
+  const existingIg    = frontImg?.querySelector('.front-instagram');
+  _dfMediaUrl = existingPhoto?.getAttribute('src') || existingIg?.getAttribute('href') || '';
+  document.getElementById('df-media-url').value = _dfMediaUrl;
+  _renderDfMediaPreview(_dfMediaUrl);
+
+  // Emoji — try <span class="front-emoji"> first (new cards), fall back to text node (legacy)
+  let emoji = '';
+  const emojiSpan = frontImg?.querySelector('.front-emoji');
+  if (emojiSpan) {
+    emoji = emojiSpan.textContent.trim();
+  } else if (frontImg) {
     for (const node of frontImg.childNodes) {
       if (node.nodeType === 3 && node.textContent.trim()) { emoji = node.textContent.trim(); break; }
     }
@@ -268,13 +365,46 @@ function buildCardHtmlFromForm() {
   const originalHtml = document.getElementById('direct-edit-html').value;
   const doc = new DOMParser().parseFromString(originalHtml, 'text/html');
 
-  // Emoji — update first text node of .front-img
   const frontImg = doc.querySelector('.front-img');
   if (frontImg) {
-    for (const node of frontImg.childNodes) {
-      if (node.nodeType === 3 && node.textContent.trim()) {
-        node.textContent = document.getElementById('df-emoji').value.trim() + '\n        ';
-        break;
+    // Remove old media elements before re-inserting
+    frontImg.querySelector('.front-photo')?.remove();
+    frontImg.querySelector('.front-instagram')?.remove();
+
+    // Inject new media
+    const photoUrl = _dfMediaUrl;
+    if (photoUrl) {
+      if (INSTAGRAM_RE.test(photoUrl)) {
+        const a = doc.createElement('a');
+        a.className = 'front-instagram';
+        a.href = photoUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.setAttribute('onclick', 'event.stopPropagation()');
+        a.textContent = '📷 Instagram';
+        frontImg.insertBefore(a, frontImg.firstChild);
+      } else {
+        const img = doc.createElement('img');
+        img.className = 'front-photo';
+        img.src = photoUrl;
+        img.alt = 'Recipe photo';
+        img.loading = 'lazy';
+        img.setAttribute('onerror', 'this.remove()');
+        frontImg.insertBefore(img, frontImg.firstChild);
+      }
+    }
+
+    // Emoji — update <span class="front-emoji"> (new cards) or legacy text node
+    const emojiVal  = document.getElementById('df-emoji').value.trim();
+    const emojiSpan = frontImg.querySelector('.front-emoji');
+    if (emojiSpan) {
+      emojiSpan.textContent = emojiVal;
+    } else {
+      for (const node of frontImg.childNodes) {
+        if (node.nodeType === 3 && node.textContent.trim()) {
+          node.textContent = emojiVal + '\n        ';
+          break;
+        }
       }
     }
   }

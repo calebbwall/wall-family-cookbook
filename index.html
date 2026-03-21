@@ -1325,6 +1325,19 @@
           <div><label class="df-label">Emoji</label><input id="df-emoji" type="text" maxlength="8" placeholder="🍕"></div>
           <div><label class="df-label">Badge</label><input id="df-badge" type="text" placeholder="Pizza · Italian"></div>
         </div>
+        <div style="margin-top:0.6rem">
+          <label class="df-label">Photo (optional)</label>
+          <div class="media-input-row">
+            <button type="button" class="media-upload-btn" onclick="document.getElementById('df-photo-file').click()">📷 Upload</button>
+            <input type="text" id="df-media-url" placeholder="or paste image / Instagram URL…" style="flex:1;min-width:0" oninput="handleDfMediaUrl(this.value)">
+          </div>
+          <input type="file" id="df-photo-file" accept="image/*" style="display:none" onchange="handleDfPhotoFile(this)">
+          <div class="media-preview-wrap" id="df-media-preview">
+            <img class="media-preview-img" id="df-media-preview-img" src="" alt="">
+            <div class="media-preview-instagram" id="df-media-preview-ig">📷 Instagram link</div>
+            <button type="button" class="media-clear-btn" onclick="clearDfMedia()" title="Remove">✕</button>
+          </div>
+        </div>
       </div>
       <div class="df-section">
         <label class="df-label">Title</label>
@@ -1418,6 +1431,18 @@
       <textarea id="recipe-input" name="recipeInput" rows="9"
         placeholder="Paste the full recipe here, or paste a URL to a recipe page…"
         required maxlength="12000"></textarea>
+
+      <label class="modal-label">Photo (optional)</label>
+      <div class="media-input-row">
+        <button type="button" class="media-upload-btn" onclick="document.getElementById('add-photo-file').click()">📷 Upload Photo</button>
+        <input type="text" id="add-media-url" placeholder="or paste image / Instagram URL…" autocomplete="off" style="flex:1;min-width:0" oninput="handleAddMediaUrl(this.value)">
+      </div>
+      <input type="file" id="add-photo-file" accept="image/*" style="display:none" onchange="handleAddPhotoFile(this)">
+      <div class="media-preview-wrap" id="add-media-preview">
+        <img class="media-preview-img" id="add-media-preview-img" src="" alt="">
+        <div class="media-preview-instagram" id="add-media-preview-ig">📷 Instagram link added</div>
+        <button type="button" class="media-clear-btn" onclick="clearAddMedia()" title="Remove">✕</button>
+      </div>
 
       <button type="submit" class="modal-submit" id="submit-btn">Add to Cookbook</button>
       <p id="modal-status"></p>
