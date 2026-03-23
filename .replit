@@ -1,4 +1,4 @@
-modules = ["web", "nodejs-20", "postgresql-16"]
+modules = ["web", "python-3.11", "postgresql-16"]
 [agent]
 expertMode = true
 
@@ -26,7 +26,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node server.js"
+args = "python app.py"
 waitForPort = 5000
 
 [[ports]]
@@ -36,4 +36,4 @@ externalPort = 80
 [deployment]
 deploymentTarget = "autoscale"
 publicDir = "."
-run = ["node", "server.js"]
+run = ["python", "app.py"]
