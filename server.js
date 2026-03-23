@@ -51,8 +51,6 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
 });
 
-// Template HTML — loaded once at startup, never modified on disk
-let templateHtml = null;
 
 const SECTION_MAP = {
   appetizer: 'APPETIZERS',
@@ -143,7 +141,7 @@ async function migrateFromOldTable() {
 
 async function buildPage() {
   const { rows } = await pool.query('SELECT * FROM recipes ORDER BY created_at ASC');
-  let html = templateHtml;
+  let html = await fs.readFile(HTML_PATH, 'utf-8');
 
   for (const [sectionKey, _category] of Object.entries(SECTION_TO_CATEGORY)) {
     const sectionCards = rows.filter(r => SECTION_MAP[r.category] === sectionKey);
@@ -933,10 +931,6 @@ Your role:
 
 (async () => {
   try {
-    // Load the static HTML template once
-    templateHtml = await fs.readFile(HTML_PATH, 'utf-8');
-    console.log('[startup] HTML template loaded');
-
     // Ensure the recipes table exists
     await ensureTable();
 
