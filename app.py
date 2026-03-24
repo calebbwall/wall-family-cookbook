@@ -9,6 +9,8 @@ import hmac
 import hashlib
 import uuid
 import json
+import base64
+import time
 from pathlib import Path
 from contextlib import contextmanager
 from functools import wraps
@@ -62,6 +64,24 @@ SECTION_TO_CATEGORY = {
     'DESSERTS':   'dessert',
 }
 
+# ── Extraction cache (in-memory, resets on restart) ────────────────────────────
+_extraction_cache: dict = {}  # {sha256_hex: (timestamp, result_dict)}
+_CACHE_TTL = 3600  # 1 hour
+
+def _cache_get(key: str):
+    entry = _extraction_cache.get(key)
+    if entry and (time.time() - entry[0]) < _CACHE_TTL:
+        return entry[1]
+    return None
+
+def _cache_set(key: str, value: dict):
+    _extraction_cache[key] = (time.time(), value)
+    if len(_extraction_cache) > 500:
+        cutoff = time.time() - _CACHE_TTL
+        for k in list(_extraction_cache.keys()):
+            if _extraction_cache[k][0] < cutoff:
+                del _extraction_cache[k]
+
 # Load HTML template once at startup
 template_html = HTML_PATH.read_text(encoding='utf-8')
 
@@ -95,6 +115,9 @@ def ensure_table():
                 created_at  TIMESTAMP DEFAULT NOW()
             )
         """)
+        # Add structured data columns if not present (safe to run repeatedly)
+        cur.execute("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS recipe_json TEXT")
+        cur.execute("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'manual'")
 
 
 def migrate_from_old_table():
@@ -146,7 +169,12 @@ def build_page():
         cur.execute('SELECT * FROM recipes ORDER BY created_at ASC')
         rows = cur.fetchall()
 
-    html = template_html
+    total   = len(rows)
+    t_label = '1 recipe' if total == 1 else f'{total} recipes'
+    html    = template_html.replace(
+        '<title>Wall Family Cookbook</title>',
+        f'<title>Wall Family Cookbook ({t_label})</title>'
+    )
 
     for section_key in SECTION_TO_CATEGORY:
         section_cards = [r for r in rows if SECTION_MAP.get(r['category']) == section_key]
@@ -596,6 +624,232 @@ def strip_card_to_text(card_html):
     text = re.sub(r'\s{2,}', ' ', text)
     return text.strip()
 
+# ── Structured extraction prompts ─────────────────────────────────────────────
+
+_JSON_SCHEMA = """{
+  "title": "recipe name",
+  "subtitle": "brief descriptor or source",
+  "category": "one of: appetizer, entree, side, snack, breakfast, dessert",
+  "emoji": "one emoji representing the dish",
+  "badge": "short badge e.g. Pizza · Italian",
+  "servings": "e.g. 4 servings",
+  "prep_time": "e.g. 15 min",
+  "cook_time": "e.g. 30 min",
+  "temperature": "e.g. 375°F — empty string if not applicable",
+  "ingredients": [{"name": "ingredient", "amount": "quantity"}],
+  "steps": [{"title": "1-2 word step name e.g. Mix", "detail": "full step detail"}],
+  "calibration_notes": [{"goal": "e.g. Crispier", "tip": "short actionable tip"}],
+  "storage": [{"method": "e.g. Refrigerator", "duration": "e.g. 3 days"}],
+  "chefs_note": "one key pro tip or technique secret",
+  "confidence": 0.95,
+  "warnings": ["list any uncertain or missing fields"]
+}"""
+
+EXTRACTION_PROMPT = (
+    "Extract this recipe and return ONLY a JSON object with these exact fields. "
+    "No markdown, no explanation, just JSON.\n\n"
+    + _JSON_SCHEMA
+    + "\n\nRules:\n"
+    "- Use sensible inferences; never write N/A or Unknown\n"
+    "- confidence: 1.0=complete recipe, 0.5=partial, 0.2=very incomplete\n"
+    "- Add warnings for missing ingredients, unclear steps, etc.\n"
+    "- Category hint: {category_hint}\n\n"
+    "Recipe content:\n---\n{content}\n---"
+)
+
+PHOTO_EXTRACTION_PROMPT = (
+    "Look at this food photo and extract any visible recipe information. "
+    "Return ONLY a JSON object with these exact fields. No markdown, just JSON.\n\n"
+    + _JSON_SCHEMA
+    + "\n\nIf the image is blurry or doesn't clearly show a recipe, "
+    "set confidence below 0.3 and add a warning.\n"
+    "Category hint: {category_hint}"
+)
+
+
+def extract_recipe_with_gemini(content: str = '', category_hint: str = '',
+                                image_data: str = '', image_mime: str = 'image/jpeg') -> dict:
+    """Call Gemini once to extract a recipe as structured JSON. Returns parsed dict."""
+    if not GEMINI_KEY:
+        raise RuntimeError('GEMINI_API_KEY is not configured')
+
+    genai.configure(api_key=GEMINI_KEY)
+    model = genai.GenerativeModel(
+        model_name='gemini-2.5-flash',
+        generation_config=genai.types.GenerationConfig(
+            temperature=0.2,
+            max_output_tokens=4000,
+            response_mime_type='application/json',
+        ),
+    )
+
+    if image_data:
+        prompt = PHOTO_EXTRACTION_PROMPT.replace(
+            '{category_hint}', category_hint or 'determine from image'
+        )
+        image_part = {'inline_data': {'mime_type': image_mime, 'data': image_data}}
+        result = model.generate_content([prompt, image_part])
+    else:
+        hint = category_hint or 'determine from content'
+        prompt = (EXTRACTION_PROMPT
+                  .replace('{category_hint}', hint)
+                  .replace('{content}', content[:8000]))
+        result = model.generate_content(prompt)
+
+    raw = result.text.strip()
+    raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.IGNORECASE)
+    raw = re.sub(r'\s*```$', '', raw)
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r'\{[\s\S]+\}', raw)
+        if m:
+            return json.loads(m.group(0))
+        raise RuntimeError('AI returned invalid JSON — please try again')
+
+
+def build_card_html_from_json(recipe_json: dict, card_id: str,
+                               author_name: str, media_url: str = '') -> str:
+    """Convert structured recipe JSON → flip-card HTML with no AI call."""
+    r = recipe_json
+
+    def esc(s):
+        return (str(s)
+                .replace('&', '&amp;').replace('<', '&lt;')
+                .replace('>', '&gt;').replace('"', '&quot;'))
+
+    title      = esc(r.get('title', 'Recipe'))
+    subtitle   = esc(r.get('subtitle', ''))
+    emoji      = esc(r.get('emoji', '🍽️'))
+    badge      = esc(r.get('badge', ''))
+    servings   = esc(r.get('servings', ''))
+    temp       = esc(r.get('temperature', ''))
+    prep       = esc(r.get('prep_time', ''))
+    cook       = esc(r.get('cook_time', ''))
+    chefs_note = esc(r.get('chefs_note', ''))
+    author_esc = esc(author_name)
+
+    chip1 = servings
+    chip2 = temp or prep
+    chip3 = cook
+    chip4 = esc(r['calibration_notes'][0].get('goal', '')) if r.get('calibration_notes') else ''
+
+    stat2_label = 'Temp' if temp else 'Prep'
+    stat2_val   = temp or prep
+
+    # Ingredients
+    ings_html = ''
+    for ing in r.get('ingredients', []):
+        n = esc(ing.get('name', ''))
+        a = esc(ing.get('amount', ''))
+        ings_html += f'\n        <div class="b-ing-row"><span class="b-ing-name">{n}</span><span class="b-ing-amt">{a}</span></div>'
+
+    # Steps
+    steps_html = ''
+    for i, step in enumerate(r.get('steps', []), 1):
+        t = esc(step.get('title', ''))
+        d = esc(step.get('detail', ''))
+        steps_html += (f'\n        <div class="b-step">'
+                       f'<span class="b-step-num">{i}</span>'
+                       f'<p class="b-step-text"><span class="b-step-title">{t}.</span> {d}</p>'
+                       f'</div>')
+
+    # Calibration notes
+    notes_html = ''
+    for note in r.get('calibration_notes', []):
+        g = esc(note.get('goal', ''))
+        t = esc(note.get('tip', ''))
+        notes_html += f'<div class="b-note"><p class="b-note-goal">{g}</p><p class="b-note-tip">{t}</p></div>'
+
+    # Storage
+    storage_html = ''
+    for store in r.get('storage', []):
+        m_val = esc(store.get('method', ''))
+        d_val = esc(store.get('duration', ''))
+        storage_html += (f'\n        <div class="b-storage-row">'
+                         f'<span class="b-storage-method">{m_val}</span>'
+                         f'<span class="b-storage-dur">{d_val}</span></div>')
+
+    # Media
+    media_html = ''
+    if media_url:
+        safe = media_url.replace('"', '%22').replace('<', '%3C').replace('>', '%3E')
+        if re.search(r'instagram\.com/(p|reel|tv)/', media_url, re.IGNORECASE):
+            media_html = (f'<a class="front-instagram" href="{safe}" target="_blank" '
+                          f'rel="noopener noreferrer" onclick="event.stopPropagation()">&#128247; Instagram</a>')
+        else:
+            media_html = (f'<img class="front-photo" src="{safe}" alt="Recipe photo" '
+                          f'loading="lazy" onerror="this.remove()">')
+
+    return f"""<div class="flip-card" id="{card_id}" onclick="toggleFlip(this)">
+  <div class="flip-card-inner">
+
+    <div class="flip-front">
+      <div class="front-img">
+        {media_html}<span class="front-emoji">{emoji}</span>
+        <button class="front-edit-btn" onclick="event.stopPropagation(); openEditModal('{card_id}')" title="Edit recipe">&#9999;&#65039;</button>
+        <span class="front-badge">{badge}</span>
+        <span class="front-hint">&#8635; Tap to see recipe</span>
+      </div>
+      <div class="front-body">
+        <div>
+          <h3 class="front-title">{title}</h3>
+          <p class="front-sub">{subtitle}</p>
+          <div class="front-chips">
+            <span class="chip">{chip1}</span>
+            <span class="chip">{chip2}</span>
+            <span class="chip">{chip3}</span>
+            <span class="chip">{chip4}</span>
+          </div>
+        </div>
+        <p class="front-author">Added by <span>{author_esc}</span></p>
+      </div>
+    </div>
+
+    <div class="flip-back">
+      <div class="back-header">
+        <div class="back-title">{title}</div>
+        <button class="back-flip-btn"
+                onclick="event.stopPropagation(); toggleFlip(document.getElementById('{card_id}'))"
+                title="Flip back">&#8634;</button>
+      </div>
+      <div class="back-scroll">
+
+        <div class="back-stats">
+          <div class="back-stat">
+            <span class="back-stat-label">Yield</span>
+            <span class="back-stat-val">{servings}</span>
+          </div>
+          <div class="back-stat">
+            <span class="back-stat-label">{stat2_label}</span>
+            <span class="back-stat-val">{stat2_val}</span>
+          </div>
+          <div class="back-stat">
+            <span class="back-stat-label">Time</span>
+            <span class="back-stat-val">{cook}</span>
+          </div>
+        </div>
+
+        <p class="b-heading">Ingredients</p>{ings_html}
+
+        <p class="b-heading">Method</p>{steps_html}
+
+        <p class="b-heading">Calibration Notes</p>
+        <div class="b-notes-grid">{notes_html}</div>
+
+        <p class="b-heading">Storage</p>{storage_html}
+
+        <p class="b-heading">Chef's Note</p>
+        <p class="b-chefs-note">{chefs_note}</p>
+
+      </div>
+    </div>
+
+  </div>
+</div><!-- /flip-card -->"""
+
+
 # ── Media injector ─────────────────────────────────────────────────────────────
 
 def inject_media(card_html, media_url):
@@ -695,6 +949,135 @@ def upload_media():
     return jsonify(url=f'/uploads/{filename}')
 
 
+@app.post('/api/extract-recipe')
+@require_auth
+def extract_recipe_endpoint():
+    """Extract recipe from text, URL, or image. Returns structured JSON for review."""
+    try:
+        source_type  = 'text'
+        content_hash = ''
+        recipe_data  = None
+
+        if request.content_type and 'multipart' in request.content_type:
+            # Photo upload
+            category_hint = request.form.get('category', '')
+            source_type   = 'photo'
+            photo = request.files.get('photo')
+            if not photo or not photo.mimetype.startswith('image/'):
+                return jsonify(error='No valid image file provided (images only, max 5 MB)'), 400
+
+            raw_bytes    = photo.read()
+            content_hash = hashlib.sha256(raw_bytes).hexdigest()
+            cached = _cache_get(content_hash)
+            if cached:
+                return jsonify(**cached)
+
+            image_b64   = base64.standard_b64encode(raw_bytes).decode()
+            recipe_data = extract_recipe_with_gemini(
+                category_hint=category_hint,
+                image_data=image_b64,
+                image_mime=photo.mimetype,
+            )
+        else:
+            body          = request.get_json(force=True, silent=True) or {}
+            content       = body.get('content', '').strip()
+            category_hint = body.get('category', '')
+            source_type   = body.get('sourceType', 'text')
+
+            if not content:
+                return jsonify(error='No content provided'), 400
+            if len(content) > 20000:
+                return jsonify(error='Content too long (max 20,000 characters)'), 400
+
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            cached = _cache_get(content_hash)
+            if cached:
+                return jsonify(**cached)
+
+            if re.match(r'^https?://', content, re.IGNORECASE):
+                source_type = 'url'
+                try:
+                    fetched     = fetch_url_content(content)
+                    recipe_data = extract_recipe_with_gemini(fetched, category_hint=category_hint)
+                except Exception:
+                    recipe_data = extract_recipe_with_gemini(content, category_hint=category_hint)
+            else:
+                recipe_data = extract_recipe_with_gemini(content, category_hint=category_hint)
+
+        if category_hint and not recipe_data.get('category'):
+            recipe_data['category'] = category_hint
+
+        result = {'recipeJson': recipe_data, 'sourceType': source_type, 'cacheKey': content_hash}
+        _cache_set(content_hash, result)
+        return jsonify(**result)
+
+    except Exception as e:
+        app.logger.error(f'[extract-recipe] {e}')
+        return jsonify(error=str(e) or 'Extraction failed — please try again'), 500
+
+
+@app.post('/api/fetch-instagram')
+@require_auth
+def fetch_instagram():
+    """Attempt to fetch an Instagram post's metadata server-side. Degrades gracefully."""
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        url  = data.get('url', '').strip()
+
+        if not re.match(r'^https?://(?:www\.)?instagram\.com/(p|reel|tv)/', url, re.IGNORECASE):
+            return jsonify(error='Not a valid Instagram URL'), 400
+
+        headers = {
+            'User-Agent': ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                           'AppleWebKit/537.36 (KHTML, like Gecko) '
+                           'Chrome/120.0.0.0 Safari/537.36'),
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        try:
+            resp = http_requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+            if not resp.ok:
+                raise ValueError(f'HTTP {resp.status_code}')
+
+            page = resp.text
+
+            def og(prop):
+                m = (re.search(rf'<meta[^>]+property="og:{prop}"[^>]+content="([^"]*)"', page, re.IGNORECASE)
+                     or re.search(rf'<meta[^>]+content="([^"]*)"[^>]+property="og:{prop}"', page, re.IGNORECASE))
+                if not m:
+                    return ''
+                v = m.group(1)
+                for old, new in [('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'),
+                                  ('&quot;', '"'), ('&#39;', "'")]:
+                    v = v.replace(old, new)
+                return v
+
+            og_title = og('title')
+            og_desc  = og('description')
+            og_image = og('image')
+
+            if og_title or og_desc:
+                return jsonify(
+                    success=True,
+                    title=og_title,
+                    caption=og_desc,
+                    image=og_image,
+                    extractedText=(og_title + '\n' + og_desc).strip(),
+                )
+            return jsonify(
+                success=False,
+                warning='Instagram did not share post content — upload a photo or paste the text instead.',
+            )
+        except Exception as fetch_err:
+            return jsonify(
+                success=False,
+                warning=f'Could not access Instagram ({fetch_err}) — upload a photo or paste the text instead.',
+            )
+    except Exception as e:
+        app.logger.error(f'[fetch-instagram] {e}')
+        return jsonify(error=str(e)), 500
+
+
 @app.post('/api/add-recipe')
 @require_auth
 def add_recipe():
@@ -702,21 +1085,46 @@ def add_recipe():
         data        = request.get_json(force=True, silent=True) or {}
         category    = data.get('category', '')
         author_name = data.get('authorName', '')
-        recipe_input= data.get('recipeInput', '')
         media_url   = data.get('mediaUrl', '')
+        recipe_json = data.get('recipeJson')   # new structured path
+        source_type = data.get('sourceType', 'manual')
 
         if category not in SECTION_MAP:
             return jsonify(error='Invalid category selected'), 400
         if not author_name or not (1 <= len(author_name.strip()) <= 40):
             return jsonify(error='Please enter your name (max 40 characters)'), 400
 
-        MEDIA_URL_RE   = re.compile(
+        author_name = author_name.strip()
+
+        # ── New path: build card from pre-reviewed JSON (no AI call) ──────────
+        if recipe_json and isinstance(recipe_json, dict):
+            title_hint = recipe_json.get('title', '') or author_name
+            card_id    = generate_unique_id(title_hint)
+            final_media = (media_url.strip()
+                           if media_url and re.match(r'^https?://', media_url, re.IGNORECASE)
+                           else '')
+            card_html = build_card_html_from_json(recipe_json, card_id, author_name, final_media)
+            card_html = re.sub(r'<script[\s\S]*?</script>', '', card_html, flags=re.IGNORECASE)
+
+            with db_cursor() as cur:
+                cur.execute(
+                    """INSERT INTO recipes (category, author_name, card_html, card_id,
+                                            recipe_json, source_type)
+                       VALUES (%s, %s, %s, %s, %s, %s)""",
+                    (category, author_name, card_html, card_id,
+                     json.dumps(recipe_json), source_type)
+                )
+            return jsonify(success=True, cardId=card_id)
+
+        # ── Legacy path: raw text/URL → Gemini HTML generation ───────────────
+        recipe_input = data.get('recipeInput', '')
+        MEDIA_URL_RE = re.compile(
             r'https?://\S*instagram\.com/(?:p|reel|tv)/[^\s"<>]+'
             r'|https?://\S+\.(?:jpg|jpeg|png|gif|webp|avif)(?:\?[^\s"<>]*)?',
             re.IGNORECASE
         )
-        recipe_text      = (recipe_input or '').strip()
-        detected_media   = ''
+        recipe_text    = (recipe_input or '').strip()
+        detected_media = ''
         m = MEDIA_URL_RE.search(recipe_text)
         if m:
             detected_media = m.group(0)
@@ -725,7 +1133,7 @@ def add_recipe():
         is_link = bool(re.match(r'^https?://.+', recipe_text, re.IGNORECASE))
         if not recipe_text or (not is_link and len(recipe_text) < 20):
             if detected_media:
-                return jsonify(error="Got your link! Now paste the recipe text alongside it and we'll attach the photo to the card."), 400
+                return jsonify(error="Got your link — paste the recipe text alongside it and we'll attach the photo."), 400
             return jsonify(error='Recipe is too short — please paste more detail'), 400
 
         is_url = bool(re.match(r'^https?://.+', recipe_text, re.IGNORECASE))
@@ -733,16 +1141,16 @@ def add_recipe():
             try:
                 recipe_text = fetch_url_content(recipe_text)
             except Exception:
-                pass  # fall through — pass URL directly to Gemini
+                pass
 
         first_line = recipe_text.split('\n')[0][:80]
         card_id    = generate_unique_id(first_line)
 
         if is_url and bool(re.match(r'^https?://.+', recipe_text, re.IGNORECASE)):
-            prompt   = build_url_prompt(recipe_text, category, author_name.strip(), card_id)
+            prompt    = build_url_prompt(recipe_text, category, author_name, card_id)
             card_html = generate_card_html(prompt, use_search=True)
         else:
-            prompt   = build_prompt(recipe_text, category, author_name.strip(), card_id)
+            prompt    = build_prompt(recipe_text, category, author_name, card_id)
             card_html = generate_card_html(prompt)
 
         final_media = detected_media or (media_url.strip() if re.match(r'^https?://', media_url or '', re.IGNORECASE) else '')
@@ -751,8 +1159,9 @@ def add_recipe():
 
         with db_cursor() as cur:
             cur.execute(
-                'INSERT INTO recipes (category, author_name, card_html, card_id) VALUES (%s, %s, %s, %s)',
-                (category, author_name.strip(), card_html, card_id)
+                """INSERT INTO recipes (category, author_name, card_html, card_id, source_type)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (category, author_name, card_html, card_id, source_type)
             )
 
         return jsonify(success=True, cardId=card_id)
@@ -845,6 +1254,40 @@ def save_card_html():
         return jsonify(error=str(e) or 'Something went wrong'), 500
 
 
+@app.get('/api/export')
+@require_auth
+def export_recipes():
+    try:
+        with db_cursor() as cur:
+            cur.execute('SELECT * FROM recipes ORDER BY created_at ASC')
+            rows = cur.fetchall()
+
+        export = []
+        for r in rows:
+            entry = {
+                'id':          r['card_id'],
+                'category':    r['category'],
+                'author':      r.get('author_name') or '',
+                'created_at':  r['created_at'].isoformat() if r.get('created_at') else None,
+            }
+            if r.get('recipe_json'):
+                entry.update(r['recipe_json'])
+            else:
+                entry['card_html'] = r['card_html']
+            export.append(entry)
+
+        resp = Response(
+            json.dumps(export, indent=2, default=str),
+            mimetype='application/json'
+        )
+        resp.headers['Content-Disposition'] = 'attachment; filename="recipes.json"'
+        return resp
+
+    except Exception as e:
+        app.logger.error(f'[export] {e}')
+        return jsonify(error=str(e) or 'Something went wrong'), 500
+
+
 @app.post('/api/delete-recipe')
 @require_auth
 def delete_recipe():
@@ -870,9 +1313,10 @@ def delete_recipe():
 @require_auth
 def chat():
     try:
-        data    = request.get_json(force=True, silent=True) or {}
-        message = data.get('message', '')
-        history = data.get('history', [])
+        data       = request.get_json(force=True, silent=True) or {}
+        message    = data.get('message', '')
+        history    = data.get('history', [])
+        recipe_ctx = data.get('recipeContext', '')  # optional focused recipe context
 
         if not message or not message.strip():
             return jsonify(error='Message is required'), 400
@@ -888,18 +1332,28 @@ def chat():
 
         recipe_catalog = build_recipe_catalog(rows)
 
-        system_prompt = f"""You are a helpful, warm cooking assistant for the Wall Family Cookbook — a private family recipe collection.
+        if recipe_ctx:
+            focus_block = (f'\n\nFOCUSED RECIPE (user is currently cooking this):\n'
+                           f'---\n{recipe_ctx[:3000]}\n---\n'
+                           f'Prioritise answering questions about this specific recipe. '
+                           f'Suggest substitutions, scaling, or technique tweaks as needed.')
+        else:
+            focus_block = ''
 
-CURRENT COOKBOOK CONTENTS:
-{recipe_catalog}
-
-Your role:
-- Answer questions about these specific recipes (ingredients, techniques, substitutions, timing, scaling)
-- Help family members decide what to cook based on what's in the cookbook
-- Suggest modifications and troubleshoot cooking problems
-- Be conversational and concise — 2 to 4 sentences unless more detail is genuinely needed
-- If asked about something not in the cookbook, say so warmly and offer related help from what's available
-- Do not invent recipes that aren't in the cookbook"""
+        system_prompt = (
+            f"You are a helpful, warm cooking assistant for the Wall Family Cookbook — "
+            f"a private family recipe collection.\n\n"
+            f"CURRENT COOKBOOK CONTENTS:\n{recipe_catalog}{focus_block}\n\n"
+            f"Your role:\n"
+            f"- Answer questions about these specific recipes (ingredients, techniques, "
+            f"substitutions, timing, scaling)\n"
+            f"- Help family members decide what to cook based on what's in the cookbook\n"
+            f"- Suggest modifications and troubleshoot cooking problems\n"
+            f"- Be conversational and concise — 2 to 4 sentences unless more detail is needed\n"
+            f"- If asked about something not in the cookbook, say so warmly and offer "
+            f"related help from what's available\n"
+            f"- Do not invent recipes that aren't in the cookbook"
+        )
 
         genai.configure(api_key=GEMINI_KEY)
         model = genai.GenerativeModel(
