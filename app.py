@@ -810,9 +810,14 @@ def build_card_html_from_json(recipe_json: dict, card_id: str,
     <div class="flip-back">
       <div class="back-header">
         <div class="back-title">{title}</div>
-        <button class="back-flip-btn"
-                onclick="event.stopPropagation(); toggleFlip(document.getElementById('{card_id}'))"
-                title="Flip back">&#8634;</button>
+        <div class="back-header-actions">
+          <button class="cook-now-btn"
+                  onclick="event.stopPropagation(); openCookNow('{title}', '{card_id}')"
+                  title="Get AI help with this recipe">🍳 Cook Now</button>
+          <button class="back-flip-btn"
+                  onclick="event.stopPropagation(); toggleFlip(document.getElementById('{card_id}'))"
+                  title="Flip back">&#8634;</button>
+        </div>
       </div>
       <div class="back-scroll">
 

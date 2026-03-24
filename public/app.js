@@ -58,6 +58,24 @@ function clearDfMedia() {
   document.getElementById('df-media-preview').style.display = 'none';
 }
 
+// ── Cook Now ─────────────────────────────────────────────────────
+let _cookNowTitle = '';
+
+function openCookNow(title, cardId) {
+  _cookNowTitle = title;
+  document.getElementById('chat-recipe-name').textContent = title;
+  document.getElementById('chat-recipe-context-bar').style.display = '';
+  if (!chatOpen) toggleChat();
+  document.getElementById('chat-messages').scrollTop = 99999;
+  document.getElementById('chat-input').focus();
+}
+
+function clearChatRecipeContext() {
+  _cookNowTitle = '';
+  document.getElementById('chat-recipe-context-bar').style.display = 'none';
+  document.getElementById('chat-recipe-name').textContent = '';
+}
+
 // ── Card flipping ────────────────────────────────────────────────
 function toggleFlip(cardEl) {
   cardEl.classList.toggle('flipped');
@@ -554,7 +572,7 @@ async function sendChat() {
     const res  = await fetch('/api/chat', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ message, history: chatHistory }),
+      body:    JSON.stringify({ message, history: chatHistory, recipeContext: _cookNowTitle }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
@@ -628,6 +646,31 @@ document.querySelectorAll('.empty-state').forEach(el => {
   btn.textContent = '+ Add the first recipe';
   btn.onclick = () => { document.getElementById('add-recipe-modal').style.display = 'flex'; };
   el.appendChild(btn);
+});
+
+// Inject "Cook Now" button into old-style cards that don't have one yet
+document.querySelectorAll('.flip-card').forEach(card => {
+  const header = card.querySelector('.back-header');
+  if (!header || header.querySelector('.cook-now-btn')) return;
+  const title = card.querySelector('.back-title')?.textContent.trim()
+             || card.querySelector('.front-title')?.textContent.trim()
+             || 'Recipe';
+  const cardId = card.id;
+  const flipBtn = header.querySelector('.back-flip-btn');
+  const actions = document.createElement('div');
+  actions.className = 'back-header-actions';
+  const cookBtn = document.createElement('button');
+  cookBtn.className = 'cook-now-btn';
+  cookBtn.textContent = '🍳 Cook Now';
+  cookBtn.title = 'Get AI help with this recipe';
+  cookBtn.onclick = e => { e.stopPropagation(); openCookNow(title, cardId); };
+  actions.appendChild(cookBtn);
+  if (flipBtn) {
+    flipBtn.onclick = e => { e.stopPropagation(); toggleFlip(card); };
+    header.removeChild(flipBtn);
+    actions.appendChild(flipBtn);
+  }
+  header.appendChild(actions);
 });
 
 // Ingredient checkboxes — check off ingredients while cooking

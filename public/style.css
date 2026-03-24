@@ -647,6 +647,27 @@ nav {
 
 .back-flip-btn:hover { background: rgba(255,255,255,0.3); }
 
+.back-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.cook-now-btn {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.35);
+  color: var(--white);
+  padding: 0.3rem 0.7rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.cook-now-btn:hover { background: rgba(255,255,255,0.32); }
+
 .back-scroll {
   flex: 1;
   overflow-y: auto;
