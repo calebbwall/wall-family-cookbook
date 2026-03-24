@@ -169,7 +169,12 @@ def build_page():
         cur.execute('SELECT * FROM recipes ORDER BY created_at ASC')
         rows = cur.fetchall()
 
-    html = template_html
+    total   = len(rows)
+    t_label = '1 recipe' if total == 1 else f'{total} recipes'
+    html    = template_html.replace(
+        '<title>Wall Family Cookbook</title>',
+        f'<title>Wall Family Cookbook ({t_label})</title>'
+    )
 
     for section_key in SECTION_TO_CATEGORY:
         section_cards = [r for r in rows if SECTION_MAP.get(r['category']) == section_key]
@@ -1246,6 +1251,40 @@ def save_card_html():
 
     except Exception as e:
         app.logger.error(f'[save-card-html] {e}')
+        return jsonify(error=str(e) or 'Something went wrong'), 500
+
+
+@app.get('/api/export')
+@require_auth
+def export_recipes():
+    try:
+        with db_cursor() as cur:
+            cur.execute('SELECT * FROM recipes ORDER BY created_at ASC')
+            rows = cur.fetchall()
+
+        export = []
+        for r in rows:
+            entry = {
+                'id':          r['card_id'],
+                'category':    r['category'],
+                'author':      r.get('author_name') or '',
+                'created_at':  r['created_at'].isoformat() if r.get('created_at') else None,
+            }
+            if r.get('recipe_json'):
+                entry.update(r['recipe_json'])
+            else:
+                entry['card_html'] = r['card_html']
+            export.append(entry)
+
+        resp = Response(
+            json.dumps(export, indent=2, default=str),
+            mimetype='application/json'
+        )
+        resp.headers['Content-Disposition'] = 'attachment; filename="recipes.json"'
+        return resp
+
+    except Exception as e:
+        app.logger.error(f'[export] {e}')
         return jsonify(error=str(e) or 'Something went wrong'), 500
 
 
