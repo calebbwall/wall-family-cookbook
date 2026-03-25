@@ -1384,9 +1384,7 @@ def chat():
             "not in the cookbook, say so warmly and offer related guidance from what is available."
         )
 
-        # Build structured content array for the REST API.
-        # Bypasses the google-generativeai SDK entirely — no proto/schema
-        # validation means no "string did not match expected pattern" errors.
+        # Build structured content list for the Gemini REST API
         contents = []
         for m in (history or [])[-6:]:
             role = m.get('role') if m else None
@@ -1399,7 +1397,7 @@ def chat():
         contents.append({'role': 'user', 'parts': [{'text': message.strip()}]})
 
         payload = {
-            'system_instruction': {'parts': [{'text': system_prompt}]},
+            'system_instruction': {'role': 'user', 'parts': [{'text': system_prompt}]},
             'contents': contents,
             'generationConfig': {
                 'temperature': 0.7,
@@ -1407,26 +1405,58 @@ def chat():
             },
         }
 
-        api_url = (
-            'https://generativelanguage.googleapis.com/v1beta/models'
-            f'/gemini-2.0-flash:generateContent?key={GEMINI_KEY}'
-        )
-        resp = http_requests.post(api_url, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
+        models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        rest_reply = None
+        last_rest_err = None
 
+        for model_id in models_to_try:
+            api_url = (
+                'https://generativelanguage.googleapis.com/v1beta/models'
+                f'/{model_id}:generateContent?key={GEMINI_KEY}'
+            )
+            try:
+                resp = http_requests.post(api_url, json=payload, timeout=30)
+                if not resp.ok:
+                    err_body = resp.text[:600]
+                    app.logger.error(f'[chat] REST {model_id} → HTTP {resp.status_code}: {err_body}')
+                    last_rest_err = f'HTTP {resp.status_code}: {err_body}'
+                    continue
+                data = resp.json()
+                rest_reply = data['candidates'][0]['content']['parts'][0]['text'].strip()
+                break
+            except Exception as ex:
+                app.logger.error(f'[chat] REST {model_id} exception: {type(ex).__name__}: {ex}')
+                last_rest_err = str(ex)
+                continue
+
+        if rest_reply:
+            return jsonify(reply=rest_reply)
+
+        # REST API failed for all models — fall back to SDK with simple prompt.
+        # Passing only the current message (no history) avoids the proto-validation
+        # error that triggers on embedded AI responses with special unicode chars.
+        app.logger.warning(f'[chat] All REST attempts failed ({last_rest_err}); using SDK fallback')
+        simple_prompt = f'{system_prompt}\n\n---\nUser: {message.strip()}\nAssistant:'
+        model = genai.GenerativeModel(model_name='gemini-2.5-flash')
+        result = model.generate_content(simple_prompt)
+        sdk_reply = None
         try:
-            reply_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
-        except (KeyError, IndexError, TypeError):
-            app.logger.warning('[chat] Unexpected Gemini response shape: %s', data)
-            return jsonify(error='The AI could not generate a response — please try again.'), 503
+            sdk_reply = result.text.strip()
+        except (ValueError, AttributeError):
+            try:
+                sdk_reply = result.candidates[0].content.parts[0].text.strip()
+            except Exception:
+                pass
 
-        return jsonify(reply=reply_text)
+        if sdk_reply:
+            return jsonify(reply=sdk_reply)
+
+        return jsonify(error='The AI could not generate a response — please try again.'), 503
 
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
-        app.logger.error(f'[chat] {type(e).__name__}: {e}\n{tb}')
+        app.logger.error(f'[chat] Unhandled {type(e).__name__}: {e}\n{tb}')
         return jsonify(error='Something went wrong — please try again.'), 500
 
 # ── Startup ────────────────────────────────────────────────────────────────────
