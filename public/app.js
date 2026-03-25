@@ -89,7 +89,6 @@ function openCookMode(title, cardId) {
   const back = card ? card.querySelector('.flip-back') : null;
   const body = document.getElementById('cook-mode-body');
   document.getElementById('cook-mode-title').textContent = '🍳 ' + title;
-  _chatRecipeContext = title;
   body.innerHTML = '';
   if (back) {
     const clone = back.cloneNode(true);
@@ -118,6 +117,20 @@ function openCookMode(title, cardId) {
         step.setAttribute('aria-checked', done ? 'true' : 'false');
       });
     });
+
+    // Build full recipe context for AI: title + temp/time + ingredients + steps
+    const tempEl  = back.querySelector('.b-temp');
+    const timeEl  = back.querySelector('.b-time');
+    const ings    = [...back.querySelectorAll('.b-ing-row')]
+                      .map(r => r.innerText.trim()).filter(Boolean);
+    const steps   = [...back.querySelectorAll('.b-step')]
+                      .map(s => s.innerText.trim()).filter(Boolean);
+    let ctx = `Recipe: ${title}`;
+    if (tempEl) ctx += `\nTemp: ${tempEl.innerText.trim()}`;
+    if (timeEl) ctx += `\nTime: ${timeEl.innerText.trim()}`;
+    if (ings.length)  ctx += `\nIngredients:\n${ings.map(i => '- ' + i).join('\n')}`;
+    if (steps.length) ctx += `\nInstructions:\n${steps.map((s, i) => `${i+1}. ${s}`).join('\n')}`;
+    _chatRecipeContext = ctx;
   }
   document.getElementById('cook-mode-overlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -131,7 +144,9 @@ function closeCookMode() {
 
 function openCookModeChat() {
   // Open the AI chat panel on top of cook mode, pre-loaded with recipe context
-  document.getElementById('chat-recipe-name').textContent = _chatRecipeContext;
+  // Show just the recipe title in the context bar (first line of context string)
+  const displayTitle = _chatRecipeContext.split('\n')[0].replace(/^Recipe:\s*/i, '') || _chatRecipeContext;
+  document.getElementById('chat-recipe-name').textContent = displayTitle;
   document.getElementById('chat-recipe-context-bar').style.display = '';
   if (!chatOpen) toggleChat();
   document.getElementById('chat-messages').scrollTop = 99999;
