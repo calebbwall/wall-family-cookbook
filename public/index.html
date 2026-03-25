@@ -59,15 +59,6 @@
       Recipes passed down, cooked with love, and always improving.<br>
       Every dish tells a story worth sharing at the table.
     </p>
-    <div class="hero-pills">
-      <a href="#appetizers" class="pill">Appetizers</a>
-      <a href="#entrees"    class="pill">Entrées</a>
-      <a href="#sides"      class="pill">Sides</a>
-      <a href="#snacks"     class="pill">Snacks</a>
-      <a href="#breakfast"  class="pill">Breakfast</a>
-      <a href="#desserts"   class="pill">Desserts</a>
-    </div>
-    <button class="hero-add-btn" onclick="openAddModal()">+ Add a Recipe</button>
   </div>
 </header>
 
@@ -510,6 +501,17 @@
     </div>
 
     <p id="edit-modal-status" aria-live="polite"></p>
+  </div>
+</div>
+
+<!-- Cook Mode Overlay -->
+<div id="cook-mode-overlay" class="cook-mode-overlay" onclick="if(event.target===this)closeCookMode()" role="dialog" aria-modal="true" aria-labelledby="cook-mode-title">
+  <div class="cook-mode-panel">
+    <div class="cook-mode-header">
+      <h2 class="cook-mode-title" id="cook-mode-title">🍳 Cooking Mode</h2>
+      <button class="cook-mode-close" onclick="closeCookMode()" aria-label="Exit cooking mode">✕ Exit</button>
+    </div>
+    <div class="cook-mode-body" id="cook-mode-body"></div>
   </div>
 </div>
 

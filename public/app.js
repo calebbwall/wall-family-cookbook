@@ -58,20 +58,39 @@ function clearDfMedia() {
   document.getElementById('df-media-preview').style.display = 'none';
 }
 
-// ── Cook Now ─────────────────────────────────────────────────────
-let _cookNowTitle = '';
+// ── Cook Mode ────────────────────────────────────────────────────
+function openCookMode(title, cardId) {
+  const card = document.getElementById(cardId);
+  const back = card ? card.querySelector('.flip-back') : null;
+  const body = document.getElementById('cook-mode-body');
+  document.getElementById('cook-mode-title').textContent = '🍳 ' + title;
+  body.innerHTML = '';
+  if (back) {
+    const clone = back.cloneNode(true);
+    const backHeader = clone.querySelector('.back-header');
+    if (backHeader) backHeader.remove();
+    body.appendChild(clone);
+    // Re-add ingredient checkboxes for cook mode
+    clone.querySelectorAll('.b-ing-row').forEach(row => {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'ing-check';
+      cb.setAttribute('aria-label', 'Mark ingredient done');
+      cb.addEventListener('change', () => row.classList.toggle('ing-checked', cb.checked));
+      cb.addEventListener('click', e => e.stopPropagation());
+      row.insertBefore(cb, row.firstChild);
+    });
+  }
+  document.getElementById('cook-mode-overlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
 
-function openCookNow(title, cardId) {
-  _cookNowTitle = title;
-  document.getElementById('chat-recipe-name').textContent = title;
-  document.getElementById('chat-recipe-context-bar').style.display = '';
-  if (!chatOpen) toggleChat();
-  document.getElementById('chat-messages').scrollTop = 99999;
-  document.getElementById('chat-input').focus();
+function closeCookMode() {
+  document.getElementById('cook-mode-overlay').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 function clearChatRecipeContext() {
-  _cookNowTitle = '';
   document.getElementById('chat-recipe-context-bar').style.display = 'none';
   document.getElementById('chat-recipe-name').textContent = '';
 }
@@ -639,14 +658,6 @@ document.querySelectorAll('.flip-card').forEach(card => {
   });
 });
 
-// Add "Add the first recipe" CTA to every empty section
-document.querySelectorAll('.empty-state').forEach(el => {
-  const btn = document.createElement('button');
-  btn.className = 'empty-cta-btn';
-  btn.textContent = '+ Add the first recipe';
-  btn.onclick = () => { document.getElementById('add-recipe-modal').style.display = 'flex'; };
-  el.appendChild(btn);
-});
 
 // Inject "Cook Now" button into old-style cards that don't have one yet
 document.querySelectorAll('.flip-card').forEach(card => {
@@ -662,8 +673,8 @@ document.querySelectorAll('.flip-card').forEach(card => {
   const cookBtn = document.createElement('button');
   cookBtn.className = 'cook-now-btn';
   cookBtn.textContent = '🍳 Cook Now';
-  cookBtn.title = 'Get AI help with this recipe';
-  cookBtn.onclick = e => { e.stopPropagation(); openCookNow(title, cardId); };
+  cookBtn.title = 'Open guided cooking mode';
+  cookBtn.onclick = e => { e.stopPropagation(); openCookMode(title, cardId); };
   actions.appendChild(cookBtn);
   if (flipBtn) {
     flipBtn.onclick = e => { e.stopPropagation(); toggleFlip(card); };
