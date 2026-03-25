@@ -19,7 +19,6 @@ import psycopg2
 import psycopg2.pool
 import psycopg2.extras
 import requests as http_requests
-import google.generativeai as genai
 from flask import (
     Flask, request, redirect, make_response,
     jsonify, Response
@@ -41,10 +40,6 @@ PORT         = int(os.environ.get('PORT', 5000))
 PASSPHRASE   = os.environ.get('PASSPHRASE', 'Joe+Linda')
 DATABASE_URL = os.environ.get('DATABASE_URL')
 GEMINI_KEY   = os.environ.get('GEMINI_API_KEY')
-
-# Configure Gemini once at module load (not on every request)
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
 
 COOKIE_NAME    = 'wfc_auth'
 COOKIE_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
@@ -581,27 +576,54 @@ OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
 
 {card_template(card_id, author_name)}"""
 
-# ── Gemini caller ──────────────────────────────────────────────────────────────
+# ── Gemini REST helper ─────────────────────────────────────────────────────────
 
-def generate_card_html(prompt, use_search=False):
+_GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+_GEMINI_MODEL = 'gemini-2.0-flash'   # stable GA model
+
+def _gemini_post(contents, gen_config=None, system_instruction=None,
+                 tools=None, model=None):
+    """POST to the Gemini generateContent REST endpoint. Returns the raw dict."""
     if not GEMINI_KEY:
         raise RuntimeError('GEMINI_API_KEY is not set in Replit Secrets')
+    url = f'{_GEMINI_BASE}/{model or _GEMINI_MODEL}:generateContent?key={GEMINI_KEY}'
+    payload = {'contents': contents}
+    if gen_config:
+        payload['generationConfig'] = gen_config
+    if system_instruction:
+        payload['system_instruction'] = {'parts': [{'text': system_instruction}]}
+    if tools:
+        payload['tools'] = tools
+    resp = http_requests.post(url, json=payload, timeout=60)
+    if not resp.ok:
+        raise RuntimeError(f'Gemini API error {resp.status_code}: {resp.text[:400]}')
+    return resp.json()
 
-    model_kwargs = {
-        'model_name': 'gemini-2.5-flash',
-        'generation_config': genai.types.GenerationConfig(temperature=0.4, max_output_tokens=8000),
-    }
-    if use_search:
-        model_kwargs['tools'] = [{'google_search': {}}]
 
-    model    = genai.GenerativeModel(**model_kwargs)
+def _gemini_text(contents, gen_config=None, system_instruction=None,
+                 tools=None, model=None):
+    """Calls _gemini_post and returns the first candidate's text."""
+    data = _gemini_post(contents, gen_config=gen_config,
+                        system_instruction=system_instruction,
+                        tools=tools, model=model)
+    try:
+        return data['candidates'][0]['content']['parts'][0]['text']
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f'Unexpected Gemini response shape: {data}') from exc
+
+
+# ── Gemini card generator ──────────────────────────────────────────────────────
+
+def generate_card_html(prompt, use_search=False):
+    contents  = [{'role': 'user', 'parts': [{'text': prompt}]}]
+    gen_cfg   = {'temperature': 0.4, 'maxOutputTokens': 8000}
+    tools     = [{'google_search': {}}] if use_search else None
     card_html = ''
 
     for attempt in range(1, 3):
-        result = model.generate_content(prompt)
-        text   = result.text.strip()
-        text   = re.sub(r'^```html\s*', '', text, flags=re.IGNORECASE)
-        text   = re.sub(r'\s*```$', '', text)
+        text = _gemini_text(contents, gen_config=gen_cfg, tools=tools).strip()
+        text = re.sub(r'^```html\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\s*```$', '', text)
 
         if 'flip-card' in text and 'flip-back' in text:
             card_html = text
@@ -672,32 +694,25 @@ PHOTO_EXTRACTION_PROMPT = (
 def extract_recipe_with_gemini(content: str = '', category_hint: str = '',
                                 image_data: str = '', image_mime: str = 'image/jpeg') -> dict:
     """Call Gemini once to extract a recipe as structured JSON. Returns parsed dict."""
-    if not GEMINI_KEY:
-        raise RuntimeError('GEMINI_API_KEY is not configured')
-
-    model = genai.GenerativeModel(
-        model_name='gemini-2.5-flash',
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.2,
-            max_output_tokens=4000,
-            response_mime_type='application/json',
-        ),
-    )
+    gen_cfg = {'temperature': 0.2, 'maxOutputTokens': 4000,
+               'responseMimeType': 'application/json'}
 
     if image_data:
         prompt = PHOTO_EXTRACTION_PROMPT.replace(
             '{category_hint}', category_hint or 'determine from image'
         )
-        image_part = {'inline_data': {'mime_type': image_mime, 'data': image_data}}
-        result = model.generate_content([prompt, image_part])
+        contents = [{'role': 'user', 'parts': [
+            {'text': prompt},
+            {'inline_data': {'mime_type': image_mime, 'data': image_data}},
+        ]}]
     else:
-        hint = category_hint or 'determine from content'
+        hint   = category_hint or 'determine from content'
         prompt = (EXTRACTION_PROMPT
                   .replace('{category_hint}', hint)
                   .replace('{content}', content[:8000]))
-        result = model.generate_content(prompt)
+        contents = [{'role': 'user', 'parts': [{'text': prompt}]}]
 
-    raw = result.text.strip()
+    raw = _gemini_text(contents, gen_config=gen_cfg).strip()
     raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.IGNORECASE)
     raw = re.sub(r'\s*```$', '', raw)
 
@@ -1384,7 +1399,7 @@ def chat():
             "not in the cookbook, say so warmly and offer related guidance from what is available."
         )
 
-        # Build structured content list for the Gemini REST API
+        # Build structured content list (conversation history + current message)
         contents = []
         for m in (history or [])[-6:]:
             role = m.get('role') if m else None
@@ -1396,67 +1411,20 @@ def chat():
                 })
         contents.append({'role': 'user', 'parts': [{'text': message.strip()}]})
 
-        payload = {
-            'system_instruction': {'role': 'user', 'parts': [{'text': system_prompt}]},
-            'contents': contents,
-            'generationConfig': {
-                'temperature': 0.7,
-                'maxOutputTokens': 1024,
-            },
-        }
+        gen_cfg = {'temperature': 0.7, 'maxOutputTokens': 1024}
 
-        models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-        rest_reply = None
-        last_rest_err = None
+        reply_text = _gemini_text(contents, gen_config=gen_cfg,
+                                  system_instruction=system_prompt).strip()
+        return jsonify(reply=reply_text)
 
-        for model_id in models_to_try:
-            api_url = (
-                'https://generativelanguage.googleapis.com/v1beta/models'
-                f'/{model_id}:generateContent?key={GEMINI_KEY}'
-            )
-            try:
-                resp = http_requests.post(api_url, json=payload, timeout=30)
-                if not resp.ok:
-                    err_body = resp.text[:600]
-                    app.logger.error(f'[chat] REST {model_id} → HTTP {resp.status_code}: {err_body}')
-                    last_rest_err = f'HTTP {resp.status_code}: {err_body}'
-                    continue
-                data = resp.json()
-                rest_reply = data['candidates'][0]['content']['parts'][0]['text'].strip()
-                break
-            except Exception as ex:
-                app.logger.error(f'[chat] REST {model_id} exception: {type(ex).__name__}: {ex}')
-                last_rest_err = str(ex)
-                continue
-
-        if rest_reply:
-            return jsonify(reply=rest_reply)
-
-        # REST API failed for all models — fall back to SDK with simple prompt.
-        # Passing only the current message (no history) avoids the proto-validation
-        # error that triggers on embedded AI responses with special unicode chars.
-        app.logger.warning(f'[chat] All REST attempts failed ({last_rest_err}); using SDK fallback')
-        simple_prompt = f'{system_prompt}\n\n---\nUser: {message.strip()}\nAssistant:'
-        model = genai.GenerativeModel(model_name='gemini-2.5-flash')
-        result = model.generate_content(simple_prompt)
-        sdk_reply = None
-        try:
-            sdk_reply = result.text.strip()
-        except (ValueError, AttributeError):
-            try:
-                sdk_reply = result.candidates[0].content.parts[0].text.strip()
-            except Exception:
-                pass
-
-        if sdk_reply:
-            return jsonify(reply=sdk_reply)
-
-        return jsonify(error='The AI could not generate a response — please try again.'), 503
+    except RuntimeError as e:
+        # RuntimeError from _gemini_text includes the API error body
+        app.logger.error(f'[chat] {e}')
+        return jsonify(error=str(e)), 502
 
     except Exception as e:
         import traceback
-        tb = traceback.format_exc()
-        app.logger.error(f'[chat] Unhandled {type(e).__name__}: {e}\n{tb}')
+        app.logger.error(f'[chat] {type(e).__name__}: {e}\n{traceback.format_exc()}')
         return jsonify(error='Something went wrong — please try again.'), 500
 
 # ── Startup ────────────────────────────────────────────────────────────────────
