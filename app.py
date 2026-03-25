@@ -1363,10 +1363,7 @@ def chat():
         genai.configure(api_key=GEMINI_KEY)
         # Match the same pattern as generate_card_html (no system_instruction,
         # plain string prompt) — avoids SDK 0.8.x pattern validation errors
-        model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash',
-            generation_config=genai.types.GenerationConfig(temperature=0.7, max_output_tokens=1000),
-        )
+        model = genai.GenerativeModel(model_name='gemini-2.5-flash')
 
         # Build conversation history as inline text
         history_text = ''
@@ -1388,8 +1385,10 @@ def chat():
         return jsonify(reply=result.text.strip())
 
     except Exception as e:
-        app.logger.error(f'[chat] {e}')
-        return jsonify(error='Something went wrong — please try again'), 500
+        import traceback
+        tb = traceback.format_exc()
+        app.logger.error(f'[chat] {type(e).__name__}: {e}\n{tb}')
+        return jsonify(error=f'{type(e).__name__}: {e}'), 500
 
 # ── Startup ────────────────────────────────────────────────────────────────────
 
