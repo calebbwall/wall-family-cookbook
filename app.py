@@ -579,7 +579,7 @@ OUTPUT THIS EXACT HTML STRUCTURE (replace all [PLACEHOLDER] text):
 # ── Gemini REST helper ─────────────────────────────────────────────────────────
 
 _GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-_GEMINI_MODEL = 'gemini-2.0-flash'   # stable GA model
+_GEMINI_MODEL = 'gemini-2.5-flash'   # stable GA model
 
 def _gemini_post(contents, gen_config=None, system_instruction=None,
                  tools=None, model=None):
