@@ -907,11 +907,47 @@ def build_recipe_catalog(rows):
     for section_key, recipes in sections.items():
         lines.append(f'[{section_key}]')
         for recipe in recipes:
-            c     = recipe['card_html']
-            title = (re.search(r'class="front-title">([^<]+)<', c) or ['', '?'])[1] if re.search(r'class="front-title">([^<]+)<', c) else '?'
-            sub   = (re.search(r'class="front-sub">([^<]+)<', c) or ['', ''])[1] if re.search(r'class="front-sub">([^<]+)<', c) else ''
-            chips = ', '.join(m.group(1) for m in re.finditer(r'class="chip">([^<]+)<', c))
-            lines.append(f'- {title} (by {recipe["author_name"]}): {chips}' + (f' — {sub}' if sub else ''))
+            c = recipe['card_html']
+
+            # Basic metadata
+            title  = re.search(r'class="front-title">([^<]+)<', c)
+            title  = title.group(1).strip() if title else '?'
+            sub    = re.search(r'class="front-sub">([^<]+)<', c)
+            sub    = sub.group(1).strip() if sub else ''
+            chips  = ', '.join(m.group(1) for m in re.finditer(r'class="chip">([^<]+)<', c))
+            temp   = re.search(r'class="b-temp[^"]*">([^<]+)<', c)
+            time_  = re.search(r'class="b-time[^"]*">([^<]+)<', c)
+
+            header = f'## {title} (by {recipe["author_name"]})'
+            if chips: header += f' | Tags: {chips}'
+            if sub:   header += f' | {sub}'
+            lines.append(header)
+
+            # Cooking parameters
+            params = []
+            if temp:  params.append(f'Temp: {temp.group(1).strip()}')
+            if time_: params.append(f'Time: {time_.group(1).strip()}')
+            if params: lines.append('  ' + ', '.join(params))
+
+            # Ingredients (qty + name)
+            for row_m in re.finditer(
+                    r'class="b-ing-row[^"]*"[^>]*>(.*?)</div>', c,
+                    re.DOTALL | re.IGNORECASE):
+                raw = re.sub(r'<[^>]+>', ' ', row_m.group(1))
+                raw = re.sub(r'\s+', ' ', raw).strip()
+                if raw:
+                    lines.append(f'  - {raw}')
+
+            # Instructions
+            for i, step_m in enumerate(re.finditer(
+                    r'class="b-step[^"]*"[^>]*>(.*?)</(?:div|p)>',
+                    c, re.DOTALL | re.IGNORECASE), 1):
+                raw = re.sub(r'<[^>]+>', ' ', step_m.group(1))
+                raw = re.sub(r'\s+', ' ', raw).strip()
+                if raw:
+                    lines.append(f'  {i}. {raw}')
+
+            lines.append('')  # blank line between recipes
 
     return '\n'.join(lines)
 
