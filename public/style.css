@@ -1378,7 +1378,7 @@ footer strong {
   border-radius: 50%;
   font-size: 1.4rem;
   cursor: pointer;
-  z-index: 400;
+  z-index: 640;
   box-shadow: 0 4px 20px rgba(139,26,26,0.45);
   display: flex;
   align-items: center;
@@ -1394,15 +1394,23 @@ footer strong {
   right: 0;
   width: 380px;
   height: 100dvh;
+  height: -webkit-fill-available;
   background: var(--dark);
-  z-index: 450;
+  /* Above cook mode (600) so it can open on top of it */
+  z-index: 650;
   display: flex;
   flex-direction: column;
-  box-shadow: -4px 0 28px rgba(0,0,0,0.45);
-  transform: translateX(100%);
+  box-shadow: -4px 0 28px rgba(0,0,0,0.6);
+  transform: translateX(110%);
+  -webkit-transform: translateX(110%);
   transition: transform 0.3s cubic-bezier(0.4, 0.2, 0.2, 1);
+  -webkit-transition: -webkit-transform 0.3s cubic-bezier(0.4, 0.2, 0.2, 1);
+  /* Force own compositor layer so iOS Safari renders above 3D flip cards */
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
-.chat-panel.open { transform: translateX(0); }
+.chat-panel.open { transform: translateX(0); -webkit-transform: translateX(0); }
 @media (max-width: 600px) { .chat-panel { width: 100%; } }
 
 .chat-panel-header {
@@ -1602,6 +1610,25 @@ footer strong {
   font-weight: 700;
   margin: 0;
 }
+.cook-mode-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cook-mode-ask-ai {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--white);
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.cook-mode-ask-ai:hover { background: rgba(255,255,255,0.25); }
 .cook-mode-close {
   background: rgba(255,255,255,0.15);
   border: none;
@@ -1613,8 +1640,17 @@ footer strong {
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
+  white-space: nowrap;
 }
 .cook-mode-close:hover { background: rgba(255,255,255,0.28); }
+/* Step done state — tap to cross off a step in cook mode */
+.cook-mode-body .b-step.step-done { opacity: 0.45; }
+.cook-mode-body .b-step.step-done .b-step-num {
+  background: var(--muted) !important;
+  text-decoration: line-through;
+}
+.cook-mode-body .b-step.step-done .b-step-text,
+.cook-mode-body .b-step.step-done .b-step-title { text-decoration: line-through; }
 .cook-mode-body {
   flex: 1;
   overflow-y: auto;
