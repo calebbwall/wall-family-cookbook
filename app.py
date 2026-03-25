@@ -1384,42 +1384,41 @@ def chat():
             "not in the cookbook, say so warmly and offer related guidance from what is available."
         )
 
-        model = genai.GenerativeModel(model_name='gemini-2.5-flash')
-
-        # Build conversation history as inline text
-        history_text = ''
+        # Build structured content array for the REST API.
+        # Bypasses the google-generativeai SDK entirely — no proto/schema
+        # validation means no "string did not match expected pattern" errors.
+        contents = []
         for m in (history or [])[-6:]:
-            if m and m.get('role') in ('user', 'model') and m.get('parts'):
-                label = 'User' if m['role'] == 'user' else 'Assistant'
-                history_text += f'\n{label}: {str(m["parts"])[:400]}'
+            role = m.get('role') if m else None
+            parts_text = m.get('parts', '') if m else ''
+            if role in ('user', 'model') and parts_text:
+                contents.append({
+                    'role': role,
+                    'parts': [{'text': str(parts_text)[:800]}],
+                })
+        contents.append({'role': 'user', 'parts': [{'text': message.strip()}]})
 
-        full_prompt = (
-            f'{system_prompt}\n\n'
-            f'---\n\n'
-            f'CONVERSATION:{history_text}\n'
-            f'User: {message.strip()}\n'
-            f'Assistant:'
+        payload = {
+            'system_instruction': {'parts': [{'text': system_prompt}]},
+            'contents': contents,
+            'generationConfig': {
+                'temperature': 0.7,
+                'maxOutputTokens': 1024,
+            },
+        }
+
+        api_url = (
+            'https://generativelanguage.googleapis.com/v1beta/models'
+            f'/gemini-2.0-flash:generateContent?key={GEMINI_KEY}'
         )
+        resp = http_requests.post(api_url, json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
 
-        result = model.generate_content(full_prompt)
-
-        # Safe text extraction — .text raises ValueError when candidates are
-        # blocked or empty (e.g. safety filter on second+ message)
-        reply_text = None
         try:
-            reply_text = result.text.strip()
-        except (ValueError, AttributeError):
-            pass
-
-        if not reply_text:
-            # Try extracting from candidates directly
-            try:
-                reply_text = result.candidates[0].content.parts[0].text.strip()
-            except (IndexError, AttributeError, TypeError):
-                pass
-
-        if not reply_text:
-            app.logger.warning('[chat] Empty/blocked response from Gemini')
+            reply_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+        except (KeyError, IndexError, TypeError):
+            app.logger.warning('[chat] Unexpected Gemini response shape: %s', data)
             return jsonify(error='The AI could not generate a response — please try again.'), 503
 
         return jsonify(reply=reply_text)
