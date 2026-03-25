@@ -69,6 +69,13 @@ nav {
 
 .nav-links a:hover { background: var(--red); color: var(--white); }
 
+/* ── Nav right container ──────────────────────────────────────── */
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 /* ── Nav search bar ───────────────────────────────────────────── */
 .nav-search {
   background: rgba(255,255,255,0.08);
@@ -85,6 +92,23 @@ nav {
 .nav-search::placeholder { color: var(--tan-dark); }
 .nav-search:focus { border-color: var(--red); width: 200px; }
 @media (max-width: 600px) { .nav-search { display: none; } }
+
+/* ── Sort select ──────────────────────────────────────────────── */
+.sort-select {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(201,185,154,0.2);
+  border-radius: 4px;
+  padding: 0.32rem 0.6rem;
+  color: var(--tan);
+  font-size: 0.78rem;
+  font-family: 'Lato', sans-serif;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.sort-select:focus { border-color: var(--red); }
+.sort-select option { background: var(--dark); color: var(--tan); }
+@media (max-width: 600px) { .sort-select { display: none; } }
 
 /* ── Nav Add Button ───────────────────────────────────────────── */
 .nav-add-btn {
@@ -943,6 +967,252 @@ footer strong {
   font-style: italic;
 }
 
+/* ── Add Recipe Modal — wide variant ─────────────────────────── */
+.modal-box--wide { max-width: 720px; }
+
+/* ── Add Recipe Modal — inputs (shared with review step) ─────── */
+#add-recipe-modal input[type="text"],
+#add-recipe-modal input[type="url"],
+#add-recipe-modal select,
+#add-recipe-modal textarea {
+  width: 100%;
+  border: 1px solid var(--tan-dark);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  font-family: 'Lato', sans-serif;
+  background: var(--white);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+#add-recipe-modal input[type="text"]:focus,
+#add-recipe-modal input[type="url"]:focus,
+#add-recipe-modal select:focus,
+#add-recipe-modal textarea:focus { border-color: var(--red); }
+#add-recipe-modal textarea { resize: vertical; min-height: 140px; }
+
+/* ── Composer tabs ────────────────────────────────────────────── */
+.composer-modes {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.2rem;
+  border-bottom: 2px solid var(--tan-dark);
+}
+.composer-mode {
+  flex: 1;
+  padding: 0.6rem 0.5rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-family: 'Lato', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brown);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.composer-mode:hover { opacity: 0.8; }
+.composer-mode.active {
+  opacity: 1;
+  border-bottom-color: var(--red);
+  color: var(--red);
+}
+.composer-pane { display: none; }
+.composer-pane.active { display: block; }
+
+/* ── Photo drop zone ──────────────────────────────────────────── */
+.photo-drop-zone {
+  border: 2px dashed var(--tan-dark);
+  border-radius: 10px;
+  padding: 2rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: rgba(255,255,255,0.5);
+}
+.photo-drop-zone:hover,
+.photo-drop-zone.drag-over {
+  border-color: var(--red);
+  background: var(--red-faint);
+}
+.photo-drop-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.photo-drop-icon { font-size: 2.5rem; line-height: 1; }
+.photo-drop-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dark);
+}
+.photo-drop-sub { font-size: 0.82rem; color: var(--muted); }
+.photo-drop-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.photo-pick-btn {
+  background: none;
+  border: 1px solid var(--tan-dark);
+  border-radius: 5px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  color: var(--brown);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.photo-pick-btn:hover { border-color: var(--red); color: var(--red); }
+.composer-photo-preview {
+  position: relative;
+  margin-top: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tan);
+}
+.composer-photo-preview img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+.composer-photo-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 0.4rem;
+  text-align: center;
+}
+
+/* ── Instagram pane ───────────────────────────────────────────── */
+.ig-status {
+  margin-top: 0.75rem;
+  font-size: 0.83rem;
+  color: var(--muted);
+  font-style: italic;
+}
+.ig-fallback {
+  margin-top: 0.9rem;
+  background: var(--red-faint);
+  border: 1px solid rgba(139,26,26,0.2);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+}
+.ig-fallback-msg {
+  font-size: 0.85rem;
+  color: var(--red);
+  font-weight: 700;
+  margin-bottom: 0.65rem;
+}
+.ig-fallback-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.ig-fallback-btn {
+  background: none;
+  border: 1px solid var(--tan-dark);
+  border-radius: 5px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  color: var(--brown);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.ig-fallback-btn:hover { border-color: var(--red); color: var(--red); }
+.ig-extracted {
+  margin-top: 0.9rem;
+  background: rgba(92,58,30,0.07);
+  border: 1px solid rgba(92,58,30,0.2);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+.ig-extracted-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brown);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+}
+.ig-extracted-text {
+  font-size: 0.83rem;
+  color: var(--text);
+  font-style: italic;
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+/* ── Composer meta row (category + author) ────────────────────── */
+.composer-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+@media (max-width: 480px) { .composer-meta { grid-template-columns: 1fr; } }
+
+/* ── Review step ──────────────────────────────────────────────── */
+.review-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+.review-back-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-family: 'Lato', sans-serif;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.review-back-btn:hover { color: var(--red); background: var(--red-faint); }
+.review-confidence {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 0.75rem;
+}
+.review-warnings {
+  background: var(--red-faint);
+  border: 1px solid rgba(139,26,26,0.25);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.83rem;
+  color: var(--red);
+  margin-bottom: 1rem;
+}
+.review-row-2 {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0;
+}
+.review-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+@media (max-width: 480px) { .review-row-4 { grid-template-columns: repeat(2, 1fr); } }
+.review-full-input { width: 100%; }
+
 /* ── Edit Recipe Modal ────────────────────────────────────────── */
 #edit-recipe-modal {
   position: fixed;
@@ -1165,6 +1435,31 @@ footer strong {
 }
 .chat-panel-close:hover { background: rgba(255,255,255,0.3); }
 
+/* ── Chat recipe context bar ──────────────────────────────────── */
+.chat-recipe-context-bar {
+  background: rgba(139,26,26,0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 0.45rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--tan);
+  flex-shrink: 0;
+}
+.chat-recipe-context-bar button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  transition: color 0.15s;
+}
+.chat-recipe-context-bar button:hover { color: var(--tan); }
+
 .chat-messages {
   flex: 1;
   overflow-y: auto;
@@ -1220,6 +1515,7 @@ footer strong {
   border-radius: 8px;
   padding: 0.6rem 0.85rem;
   color: var(--white);
+  -webkit-text-fill-color: var(--white);
   font-size: 0.85rem;
   font-family: 'Lato', sans-serif;
   outline: none;
@@ -1270,6 +1566,86 @@ footer strong {
 }
 #back-to-top.visible { display: flex; }
 #back-to-top:hover { background: var(--dark); transform: scale(1.08); }
+
+/* ── Cook Mode Overlay ────────────────────────────────────────── */
+.cook-mode-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: rgba(0,0,0,0.72);
+  display: none;
+  align-items: stretch;
+  justify-content: center;
+}
+.cook-mode-panel {
+  background: var(--cream);
+  width: 100%;
+  max-width: 760px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(0,0,0,0.5);
+}
+.cook-mode-header {
+  background: var(--red);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.cook-mode-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  color: var(--white);
+  font-weight: 700;
+  margin: 0;
+}
+.cook-mode-close {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: var(--white);
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.cook-mode-close:hover { background: rgba(255,255,255,0.28); }
+.cook-mode-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--red) transparent;
+}
+.cook-mode-body::-webkit-scrollbar { width: 4px; }
+.cook-mode-body::-webkit-scrollbar-thumb { background: var(--red); border-radius: 2px; }
+/* Make cloned flip-back content readable in cook mode */
+.cook-mode-body .flip-back {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  color: var(--text);
+  overflow: visible;
+}
+.cook-mode-body .back-stats { background: var(--tan); border-radius: 8px; }
+.cook-mode-body .b-stat-val { color: var(--dark); }
+.cook-mode-body .b-stat-label { color: var(--muted); }
+.cook-mode-body .b-section-title { color: var(--brown); }
+.cook-mode-body .b-ing-name,
+.cook-mode-body .b-ing-amount { color: var(--text); }
+.cook-mode-body .b-step-num { color: var(--white); }
+.cook-mode-body .b-step-text { color: var(--text); }
+.cook-mode-body .b-note-item { color: var(--text); }
+.cook-mode-body .b-storage-label { color: var(--dark); }
+.cook-mode-body .b-storage-val { color: var(--muted); }
+.cook-mode-body .b-chefs-note { background: var(--red-faint); color: var(--text); border-left: 3px solid var(--red); }
+@media (max-width: 600px) { .cook-mode-body { padding: 1rem; } }
 
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 600px) {
