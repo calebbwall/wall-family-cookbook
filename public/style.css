@@ -1578,7 +1578,7 @@ footer strong {
   justify-content: center;
 }
 .cook-mode-panel {
-  background: var(--cream);
+  background: var(--dark);
   width: 100%;
   max-width: 760px;
   height: 100dvh;
@@ -1618,33 +1618,24 @@ footer strong {
 .cook-mode-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 2rem;
+  padding: 1rem;
+  background: rgba(0,0,0,0.15);
   scrollbar-width: thin;
   scrollbar-color: var(--red) transparent;
 }
 .cook-mode-body::-webkit-scrollbar { width: 4px; }
 .cook-mode-body::-webkit-scrollbar-thumb { background: var(--red); border-radius: 2px; }
-/* Make cloned flip-back content readable in cook mode */
+/* Reset flip-back card CSS that would break the cook mode layout */
 .cook-mode-body .flip-back {
-  background: none;
+  position: static !important;
+  transform: none !important;
+  inset: auto !important;
+  background: var(--dark);
   box-shadow: none;
-  border-radius: 0;
-  padding: 0;
-  color: var(--text);
+  border-radius: 10px;
   overflow: visible;
+  flex: none;
 }
-.cook-mode-body .back-stats { background: var(--tan); border-radius: 8px; }
-.cook-mode-body .b-stat-val { color: var(--dark); }
-.cook-mode-body .b-stat-label { color: var(--muted); }
-.cook-mode-body .b-section-title { color: var(--brown); }
-.cook-mode-body .b-ing-name,
-.cook-mode-body .b-ing-amount { color: var(--text); }
-.cook-mode-body .b-step-num { color: var(--white); }
-.cook-mode-body .b-step-text { color: var(--text); }
-.cook-mode-body .b-note-item { color: var(--text); }
-.cook-mode-body .b-storage-label { color: var(--dark); }
-.cook-mode-body .b-storage-val { color: var(--muted); }
-.cook-mode-body .b-chefs-note { background: var(--red-faint); color: var(--text); border-left: 3px solid var(--red); }
 @media (max-width: 600px) { .cook-mode-body { padding: 1rem; } }
 
 /* ── Responsive ───────────────────────────────────────────────── */
