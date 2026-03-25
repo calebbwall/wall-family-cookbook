@@ -1212,6 +1212,36 @@ footer strong {
 }
 @media (max-width: 480px) { .review-row-4 { grid-template-columns: repeat(2, 1fr); } }
 .review-full-input { width: 100%; }
+.rv-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin-bottom: 0.4rem;
+}
+.rv-row input, .rv-row textarea {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.83rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tan-dark);
+  border-radius: 5px;
+  background: #fffaf4;
+  color: var(--brown);
+}
+.rv-row textarea { resize: vertical; }
+.rv-ing-name  { flex: 2 !important; }
+.rv-ing-amt   { flex: 1 !important; }
+.rv-remove-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.3rem 0.2rem;
+  line-height: 1;
+}
+.rv-remove-btn:hover { color: var(--red); }
 
 /* ── Edit Recipe Modal ────────────────────────────────────────── */
 #edit-recipe-modal {

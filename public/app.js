@@ -14,6 +14,29 @@
  *   - Page-load init
  */
 
+// ── Safe JSON helper ─────────────────────────────────────────────
+// Wraps res.json() so a non-JSON response (e.g. HTML login page returned
+// when a session expires) never leaks a raw WebKit parse error like
+// "The string did not match the expected pattern." to the user.
+async function safeJson(res) {
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    // Response wasn't JSON — almost always means auth expired and the
+    // server returned the HTML login page.
+    if (res.status === 401 || res.redirected) {
+      throw new Error('Session expired — please refresh the page and log in again.');
+    }
+    throw new Error('Unexpected server response — please try again.');
+  }
+  // Even if JSON parsed, a 401 status means the session is gone.
+  if (res.status === 401) {
+    throw new Error(data.error || 'Session expired — please refresh the page and log in again.');
+  }
+  return data;
+}
+
 // ── Media state ──────────────────────────────────────────────────
 const INSTAGRAM_RE = /instagram\.com\/(p|reel|tv)\//i;
 let _dfMediaUrl = ''; // resolved URL for Direct Edit form
@@ -25,12 +48,12 @@ async function handleDfPhotoFile(input) {
   form.append('photo', input.files[0]);
   try {
     const res  = await fetch('/api/upload-media', { method: 'POST', body: form });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) { alert(data.error || 'Upload failed'); return; }
     _dfMediaUrl = data.url;
     document.getElementById('df-media-url').value = '';
     _renderDfMediaPreview(data.url);
-  } catch { alert('Upload failed — please try again'); }
+  } catch (err) { alert(err.message || 'Upload failed — please try again'); }
 }
 
 function handleDfMediaUrl(val) {
@@ -134,35 +157,387 @@ function toggleFlip(cardEl) {
   }
 }
 
-// ── Add Recipe modal ─────────────────────────────────────────────
-async function submitRecipe(event) {
+// ── Add Recipe modal — two-step: Compose → Review ────────────────
+let _composerMode    = 'text';
+let _composerPhotoFile = null;
+let _composerPhotoUrl  = '';
+let _composerIgText    = '';
+let _cachedRecipeJson  = null;
+let _cachedSourceType  = 'text';
+
+function openAddModal() {
+  document.getElementById('add-author').value =
+    localStorage.getItem('wfc_author') || '';
+  showComposeStep();
+  document.getElementById('add-recipe-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAddModal() {
+  document.getElementById('add-recipe-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function selectComposerMode(mode) {
+  _composerMode = mode;
+  document.querySelectorAll('.composer-mode').forEach(btn => {
+    const active = btn.dataset.mode === mode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.composer-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === 'composer-pane-' + mode);
+  });
+}
+
+function handleComposerTextInput(value) {
+}
+
+function handlePhotoDrop(event) {
   event.preventDefault();
-  const form   = event.target;
-  const btn    = document.getElementById('submit-btn');
-  const status = document.getElementById('modal-status');
+  event.currentTarget.classList.remove('drag-over');
+  const file = event.dataTransfer.files && event.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    _previewComposerPhoto(file);
+  }
+}
+
+function handleComposerPhotoFile(input) {
+  if (!input.files || !input.files[0]) return;
+  _previewComposerPhoto(input.files[0]);
+}
+
+function _previewComposerPhoto(file) {
+  _composerPhotoFile = file;
+  _composerPhotoUrl  = '';
+  const preview = document.getElementById('composer-photo-preview');
+  const img     = document.getElementById('composer-photo-img');
+  const meta    = document.getElementById('composer-photo-meta');
+  const reader  = new FileReader();
+  reader.onload = e => {
+    img.src = e.target.result;
+    preview.style.display = 'block';
+    const kb = Math.round(file.size / 1024);
+    meta.textContent = file.name + ' · ' + kb + ' KB';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearComposerPhoto() {
+  _composerPhotoFile = null;
+  _composerPhotoUrl  = '';
+  document.getElementById('composer-photo-file').value   = '';
+  document.getElementById('composer-photo-camera').value = '';
+  document.getElementById('composer-photo-preview').style.display = 'none';
+}
+
+let _igFetchTimeout = null;
+function handleIgUrlInput(value) {
+  _composerIgText = '';
+  const status   = document.getElementById('ig-status');
+  const fallback = document.getElementById('ig-fallback');
+  const extracted = document.getElementById('ig-extracted');
+  fallback.style.display  = 'none';
+  extracted.style.display = 'none';
+  status.style.display    = 'none';
+  clearTimeout(_igFetchTimeout);
+  if (!value.trim() || !/instagram\.com\/(p|reel|tv)\//i.test(value)) return;
+  status.style.display  = 'block';
+  status.textContent    = 'Fetching post…';
+  _igFetchTimeout = setTimeout(async () => {
+    try {
+      const res  = await fetch('/api/fetch-instagram', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ url: value.trim() }),
+      });
+      const data = await safeJson(res);
+      if (data.success && data.extractedText) {
+        _composerIgText = data.extractedText;
+        document.getElementById('ig-extracted-text').textContent =
+          data.extractedText.slice(0, 200) + (data.extractedText.length > 200 ? '…' : '');
+        extracted.style.display = 'block';
+        status.style.display    = 'none';
+      } else {
+        status.style.display   = 'none';
+        fallback.style.display = 'block';
+      }
+    } catch {
+      status.style.display   = 'none';
+      fallback.style.display = 'block';
+    }
+  }, 800);
+}
+
+function showComposeStep() {
+  document.getElementById('add-step-compose').style.display = '';
+  document.getElementById('add-step-review').style.display  = 'none';
+  const status = document.getElementById('compose-status');
+  status.style.display = 'none';
+  const btn = document.getElementById('extract-btn');
+  btn.disabled    = false;
+  btn.textContent = 'Extract Recipe →';
+}
+
+async function startExtraction() {
+  const btn    = document.getElementById('extract-btn');
+  const status = document.getElementById('compose-status');
+  const category   = document.getElementById('add-category').value;
+  const authorName = document.getElementById('add-author').value.trim();
+
+  status.style.display = 'none';
+
+  if (!category) {
+    status.style.display = 'block';
+    status.style.color   = 'var(--red)';
+    status.textContent   = 'Please choose a category.';
+    return;
+  }
+  if (!authorName) {
+    status.style.display = 'block';
+    status.style.color   = 'var(--red)';
+    status.textContent   = 'Please enter your name.';
+    return;
+  }
 
   btn.disabled    = true;
-  btn.textContent = 'Formatting with AI…';
+  btn.textContent = 'Extracting…';
+
+  try {
+    let res, data;
+
+    if (_composerMode === 'photo') {
+      if (!_composerPhotoFile) throw new Error('Please choose a photo first.');
+      const form = new FormData();
+      form.append('photo', _composerPhotoFile);
+      form.append('category', category);
+      res  = await fetch('/api/extract-recipe', { method: 'POST', body: form });
+      data = await safeJson(res);
+    } else if (_composerMode === 'instagram') {
+      const content = _composerIgText ||
+        document.getElementById('composer-ig-url').value.trim();
+      if (!content) throw new Error('Please enter an Instagram URL.');
+      res  = await fetch('/api/extract-recipe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ content, category, sourceType: 'instagram' }),
+      });
+      data = await safeJson(res);
+    } else {
+      const content = document.getElementById('composer-text-input').value.trim();
+      if (!content) throw new Error('Please paste some recipe text or a URL.');
+      res  = await fetch('/api/extract-recipe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ content, category, sourceType: 'text' }),
+      });
+      data = await safeJson(res);
+    }
+
+    if (!res.ok) throw new Error(data.error || 'Extraction failed — please try again.');
+
+    _cachedRecipeJson = data.recipeJson || {};
+    _cachedSourceType = data.sourceType || _composerMode;
+    localStorage.setItem('wfc_author', authorName);
+    _populateReviewForm(_cachedRecipeJson);
+    document.getElementById('add-step-compose').style.display = 'none';
+    document.getElementById('add-step-review').style.display  = '';
+
+  } catch (err) {
+    status.style.display = 'block';
+    status.style.color   = 'var(--red)';
+    status.textContent   = err.message;
+    btn.disabled    = false;
+    btn.textContent = 'Extract Recipe →';
+  }
+}
+
+function _populateReviewForm(r) {
+  document.getElementById('rv-emoji').value    = r.emoji    || '';
+  document.getElementById('rv-badge').value    = r.badge    || '';
+  document.getElementById('rv-title').value    = r.title    || '';
+  document.getElementById('rv-subtitle').value = r.subtitle || '';
+  document.getElementById('rv-servings').value = r.servings || '';
+  document.getElementById('rv-prep').value     = r.prep_time    || '';
+  document.getElementById('rv-cook').value     = r.cook_time    || '';
+  document.getElementById('rv-temp').value     = r.temperature  || '';
+  document.getElementById('rv-chefs-note').value = r.chefs_note || '';
+
+  const confEl = document.getElementById('review-confidence');
+  confEl.textContent = '';
+  const warnEl = document.getElementById('review-warnings');
+  warnEl.style.display = 'none';
+  warnEl.textContent   = '';
+
+  const ingContainer = document.getElementById('rv-ingredients');
+  ingContainer.innerHTML = '';
+  (r.ingredients || []).forEach(i => rvAddIngredient(i.name || '', i.amount || ''));
+  if (!(r.ingredients || []).length) rvAddIngredient('', '');
+
+  const stepsContainer = document.getElementById('rv-steps');
+  stepsContainer.innerHTML = '';
+  (r.steps || []).forEach(s => rvAddStep(s.title || '', s.detail || ''));
+  if (!(r.steps || []).length) rvAddStep('', '');
+
+  const notesContainer = document.getElementById('rv-notes');
+  notesContainer.innerHTML = '';
+  (r.calibration_notes || []).forEach(n => rvAddNote(n.goal || '', n.tip || ''));
+
+  const storageContainer = document.getElementById('rv-storage');
+  storageContainer.innerHTML = '';
+  (r.storage || []).forEach(s => rvAddStorage(s.method || '', s.duration || ''));
+
+  document.getElementById('review-status').style.display = 'none';
+  const saveBtn = document.getElementById('review-save-btn');
+  saveBtn.disabled    = false;
+  saveBtn.textContent = 'Save to Cookbook';
+}
+
+function _rvRemoveRow(btn) {
+  btn.closest('.rv-row').remove();
+}
+
+function rvAddIngredient(name, amount) {
+  const container = document.getElementById('rv-ingredients');
+  const row = document.createElement('div');
+  row.className = 'rv-row rv-ing-row';
+  row.innerHTML =
+    '<input type="text" class="rv-ing-name" placeholder="Ingredient" value="' + _esc(name) + '">' +
+    '<input type="text" class="rv-ing-amt"  placeholder="Amount"     value="' + _esc(amount) + '">' +
+    '<button type="button" class="rv-remove-btn" onclick="_rvRemoveRow(this)" aria-label="Remove">✕</button>';
+  container.appendChild(row);
+}
+
+function rvAddStep(title, detail) {
+  const container = document.getElementById('rv-steps');
+  const row = document.createElement('div');
+  row.className = 'rv-row rv-step-row';
+  row.innerHTML =
+    '<input type="text" class="rv-step-title"  placeholder="Step title" value="' + _esc(title) + '">' +
+    '<textarea class="rv-step-detail" placeholder="Detail" rows="2">' + _escText(detail) + '</textarea>' +
+    '<button type="button" class="rv-remove-btn" onclick="_rvRemoveRow(this)" aria-label="Remove">✕</button>';
+  container.appendChild(row);
+}
+
+function rvAddNote(goal, tip) {
+  const container = document.getElementById('rv-notes');
+  const row = document.createElement('div');
+  row.className = 'rv-row rv-note-row';
+  row.innerHTML =
+    '<input type="text" class="rv-note-goal" placeholder="Goal"  value="' + _esc(goal) + '">' +
+    '<input type="text" class="rv-note-tip"  placeholder="Tip"   value="' + _esc(tip) + '">' +
+    '<button type="button" class="rv-remove-btn" onclick="_rvRemoveRow(this)" aria-label="Remove">✕</button>';
+  container.appendChild(row);
+}
+
+function rvAddStorage(method, duration) {
+  const container = document.getElementById('rv-storage');
+  const row = document.createElement('div');
+  row.className = 'rv-row rv-storage-row';
+  row.innerHTML =
+    '<input type="text" class="rv-storage-method"   placeholder="Method"   value="' + _esc(method) + '">' +
+    '<input type="text" class="rv-storage-duration" placeholder="Duration" value="' + _esc(duration) + '">' +
+    '<button type="button" class="rv-remove-btn" onclick="_rvRemoveRow(this)" aria-label="Remove">✕</button>';
+  container.appendChild(row);
+}
+
+function _esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _escText(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _readReviewJson() {
+  const ingredients = [];
+  document.querySelectorAll('#rv-ingredients .rv-ing-row').forEach(row => {
+    const name   = row.querySelector('.rv-ing-name').value.trim();
+    const amount = row.querySelector('.rv-ing-amt').value.trim();
+    if (name || amount) ingredients.push({ name, amount });
+  });
+
+  const steps = [];
+  document.querySelectorAll('#rv-steps .rv-step-row').forEach(row => {
+    const title  = row.querySelector('.rv-step-title').value.trim();
+    const detail = row.querySelector('.rv-step-detail').value.trim();
+    if (title || detail) steps.push({ title, detail });
+  });
+
+  const calibration_notes = [];
+  document.querySelectorAll('#rv-notes .rv-note-row').forEach(row => {
+    const goal = row.querySelector('.rv-note-goal').value.trim();
+    const tip  = row.querySelector('.rv-note-tip').value.trim();
+    if (goal || tip) calibration_notes.push({ goal, tip });
+  });
+
+  const storage = [];
+  document.querySelectorAll('#rv-storage .rv-storage-row').forEach(row => {
+    const method   = row.querySelector('.rv-storage-method').value.trim();
+    const duration = row.querySelector('.rv-storage-duration').value.trim();
+    if (method || duration) storage.push({ method, duration });
+  });
+
+  return {
+    emoji:       document.getElementById('rv-emoji').value.trim(),
+    badge:       document.getElementById('rv-badge').value.trim(),
+    title:       document.getElementById('rv-title').value.trim(),
+    subtitle:    document.getElementById('rv-subtitle').value.trim(),
+    servings:    document.getElementById('rv-servings').value.trim(),
+    prep_time:   document.getElementById('rv-prep').value.trim(),
+    cook_time:   document.getElementById('rv-cook').value.trim(),
+    temperature: document.getElementById('rv-temp').value.trim(),
+    chefs_note:  document.getElementById('rv-chefs-note').value.trim(),
+    category:    document.getElementById('add-category').value,
+    ingredients,
+    steps,
+    calibration_notes,
+    storage,
+  };
+}
+
+async function saveFromReview() {
+  const btn    = document.getElementById('review-save-btn');
+  const status = document.getElementById('review-status');
+  const category   = document.getElementById('add-category').value;
+  const authorName = document.getElementById('add-author').value.trim();
+
+  if (!category) {
+    status.style.display = 'block';
+    status.style.color   = 'var(--red)';
+    status.textContent   = 'No category — go back and choose one.';
+    return;
+  }
+
+  const recipeJson = _readReviewJson();
+  if (!recipeJson.title) {
+    status.style.display = 'block';
+    status.style.color   = 'var(--red)';
+    status.textContent   = 'Recipe title is required.';
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
   status.style.display = 'none';
-  status.textContent   = '';
 
   try {
     const res  = await fetch('/api/add-recipe', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
-        category:    form.category.value,
-        authorName:  form.authorName.value.trim(),
-        recipeInput: form.recipeInput.value.trim(),
+        category,
+        authorName,
+        recipeJson,
+        sourceType: _cachedSourceType,
+        mediaUrl:   _composerPhotoUrl,
       }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
 
     status.style.display = 'block';
     status.style.color   = '#2a7a2a';
-    status.textContent   = '✓ Recipe added! Refreshing page…';
-    localStorage.setItem('wfc_author', form.authorName.value.trim());
+    status.textContent   = '✓ Recipe added! Refreshing…';
     setTimeout(() => window.location.reload(), 2000);
 
   } catch (err) {
@@ -170,7 +545,7 @@ async function submitRecipe(event) {
     status.style.color   = 'var(--red)';
     status.textContent   = err.message;
     btn.disabled    = false;
-    btn.textContent = 'Add to Cookbook';
+    btn.textContent = 'Save to Cookbook';
   }
 }
 
@@ -195,7 +570,7 @@ function openEditModal(cardId) {
   document.getElementById('delete-recipe-name').textContent = titleEl ? titleEl.textContent : cardId;
 
   fetch('/api/get-card-html?cardId=' + encodeURIComponent(cardId))
-    .then(r => r.json())
+    .then(r => safeJson(r))
     .then(data => {
       if (data.cardHtml) {
         document.getElementById('direct-edit-html').value = data.cardHtml;
@@ -252,7 +627,7 @@ async function submitAiEdit(event) {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ cardId, editInstructions: instructions }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
 
     showEditStatus('Recipe updated! Refreshing…', false);
@@ -527,7 +902,7 @@ async function submitDirectEdit() {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ cardId, cardHtml: newHtml }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
 
     showEditStatus('Changes saved! Refreshing…', false);
@@ -554,7 +929,7 @@ async function submitDelete() {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ cardId }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
 
     showEditStatus('Recipe deleted! Refreshing…', false);
@@ -612,7 +987,7 @@ async function sendChat() {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ message, history: chatHistory, recipeContext: _chatRecipeContext }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
 
     thinking.remove();

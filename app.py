@@ -219,6 +219,10 @@ def require_auth(f):
         token = request.cookies.get(COOKIE_NAME, '')
         if token == VALID_TOKEN:
             return f(*args, **kwargs)
+        # API routes must return JSON so fetch() callers can parse the error.
+        # Non-API routes (page loads) get the HTML gate page.
+        if request.path.startswith('/api/'):
+            return jsonify(error='Session expired — please refresh the page and log in again.'), 401
         return Response(build_gate_page(), mimetype='text/html')
     return decorated
 
