@@ -1367,14 +1367,15 @@ def chat():
             system_instruction=system_prompt,
         )
 
-        safe_history = [
-            {'role': m['role'], 'parts': [str(m['parts'])[:500]]}
-            for m in (history or [])[-8:]
-            if m and m.get('role') in ('user', 'model') and m.get('parts')
-        ]
+        # Build conversation contents using generate_content (avoids start_chat
+        # SDK validation quirks that produce "string did not match expected pattern")
+        contents = []
+        for m in (history or [])[-8:]:
+            if m and m.get('role') in ('user', 'model') and m.get('parts'):
+                contents.append({'role': m['role'], 'parts': [str(m['parts'])[:500]]})
+        contents.append({'role': 'user', 'parts': [message.strip()]})
 
-        chat_session = model.start_chat(history=safe_history)
-        result       = chat_session.send_message(message.strip())
+        result = model.generate_content(contents)
 
         return jsonify(reply=result.text.strip())
 
