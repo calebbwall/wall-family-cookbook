@@ -112,7 +112,14 @@ function openCookModeChat() {
   document.getElementById('chat-recipe-context-bar').style.display = '';
   if (!chatOpen) toggleChat();
   document.getElementById('chat-messages').scrollTop = 99999;
-  document.getElementById('chat-input').focus();
+  // Don't auto-focus on mobile — it opens keyboard which can hide the panel
+  if (window.innerWidth > 600) document.getElementById('chat-input').focus();
+}
+
+function clearChatRecipeContext() {
+  _chatRecipeContext = '';
+  document.getElementById('chat-recipe-context-bar').style.display = 'none';
+  document.getElementById('chat-recipe-name').textContent = '';
 }
 
 // ── Card flipping ────────────────────────────────────────────────
@@ -563,21 +570,13 @@ async function submitDelete() {
 let chatHistory = [];
 let chatOpen    = false;
 
-// Fallback for browsers that don't support 100dvh: resize the chat panel
-// to match the visual viewport height so the input stays above the keyboard.
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', () => {
-    const panel = document.getElementById('chat-panel');
-    if (chatOpen) panel.style.height = window.visualViewport.height + 'px';
-  });
-}
-
 function toggleChat() {
   chatOpen = !chatOpen;
   const panel = document.getElementById('chat-panel');
   panel.classList.toggle('open', chatOpen);
-  if (!chatOpen) panel.style.height = ''; // reset any JS-set height on close
-  if (chatOpen) document.getElementById('chat-input').focus();
+  // Only auto-focus on desktop — on mobile, letting the keyboard open automatically
+  // can push the panel off-screen before it fades in
+  if (chatOpen && window.innerWidth > 600) document.getElementById('chat-input').focus();
 }
 
 function appendChatMessage(role, text) {
@@ -624,7 +623,7 @@ async function sendChat() {
 
   } catch (err) {
     thinking.remove();
-    appendChatMessage('assistant', 'Sorry, something went wrong — please try again.');
+    appendChatMessage('assistant', err.message || 'Sorry, something went wrong — please try again.');
   } finally {
     sendBtn.disabled = false;
     input.focus();
