@@ -42,6 +42,10 @@ PASSPHRASE   = os.environ.get('PASSPHRASE', 'Joe+Linda')
 DATABASE_URL = os.environ.get('DATABASE_URL')
 GEMINI_KEY   = os.environ.get('GEMINI_API_KEY')
 
+# Configure Gemini once at module load (not on every request)
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
+
 COOKIE_NAME    = 'wfc_auth'
 COOKIE_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
 
@@ -583,8 +587,6 @@ def generate_card_html(prompt, use_search=False):
     if not GEMINI_KEY:
         raise RuntimeError('GEMINI_API_KEY is not set in Replit Secrets')
 
-    genai.configure(api_key=GEMINI_KEY)
-
     model_kwargs = {
         'model_name': 'gemini-2.5-flash',
         'generation_config': genai.types.GenerationConfig(temperature=0.4, max_output_tokens=8000),
@@ -673,7 +675,6 @@ def extract_recipe_with_gemini(content: str = '', category_hint: str = '',
     if not GEMINI_KEY:
         raise RuntimeError('GEMINI_API_KEY is not configured')
 
-    genai.configure(api_key=GEMINI_KEY)
     model = genai.GenerativeModel(
         model_name='gemini-2.5-flash',
         generation_config=genai.types.GenerationConfig(
@@ -1360,9 +1361,6 @@ def chat():
             f"- Do not invent recipes that aren't in the cookbook"
         )
 
-        genai.configure(api_key=GEMINI_KEY)
-        # Match the same pattern as generate_card_html (no system_instruction,
-        # plain string prompt) — avoids SDK 0.8.x pattern validation errors
         model = genai.GenerativeModel(model_name='gemini-2.5-flash')
 
         # Build conversation history as inline text
@@ -1382,13 +1380,32 @@ def chat():
 
         result = model.generate_content(full_prompt)
 
-        return jsonify(reply=result.text.strip())
+        # Safe text extraction — .text raises ValueError when candidates are
+        # blocked or empty (e.g. safety filter on second+ message)
+        reply_text = None
+        try:
+            reply_text = result.text.strip()
+        except (ValueError, AttributeError):
+            pass
+
+        if not reply_text:
+            # Try extracting from candidates directly
+            try:
+                reply_text = result.candidates[0].content.parts[0].text.strip()
+            except (IndexError, AttributeError, TypeError):
+                pass
+
+        if not reply_text:
+            app.logger.warning('[chat] Empty/blocked response from Gemini')
+            return jsonify(error='The AI could not generate a response — please try again.'), 503
+
+        return jsonify(reply=reply_text)
 
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
         app.logger.error(f'[chat] {type(e).__name__}: {e}\n{tb}')
-        return jsonify(error=f'{type(e).__name__}: {e}'), 500
+        return jsonify(error='Something went wrong — please try again.'), 500
 
 # ── Startup ────────────────────────────────────────────────────────────────────
 
