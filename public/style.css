@@ -1396,21 +1396,24 @@ footer strong {
   height: 100dvh;
   height: -webkit-fill-available;
   background: var(--dark);
-  /* Above cook mode (600) so it can open on top of it */
+  /* Above cook mode (600) so it opens on top */
   z-index: 650;
   display: flex;
   flex-direction: column;
   box-shadow: -4px 0 28px rgba(0,0,0,0.6);
-  transform: translateX(110%);
-  -webkit-transform: translateX(110%);
-  transition: transform 0.3s cubic-bezier(0.4, 0.2, 0.2, 1);
-  -webkit-transition: -webkit-transform 0.3s cubic-bezier(0.4, 0.2, 0.2, 1);
-  /* Force own compositor layer so iOS Safari renders above 3D flip cards */
-  will-change: transform;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
+  /* Visibility/opacity instead of transform — avoids iOS Safari bug where
+     position:fixed + CSS transform stops tracking the visual viewport,
+     causing the panel to scroll off-screen when the keyboard opens */
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
 }
-.chat-panel.open { transform: translateX(0); -webkit-transform: translateX(0); }
+.chat-panel.open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
 @media (max-width: 600px) { .chat-panel { width: 100%; } }
 
 .chat-panel-header {
