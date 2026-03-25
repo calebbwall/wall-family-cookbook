@@ -1361,21 +1361,29 @@ def chat():
         )
 
         genai.configure(api_key=GEMINI_KEY)
+        # Match the same pattern as generate_card_html (no system_instruction,
+        # plain string prompt) — avoids SDK 0.8.x pattern validation errors
         model = genai.GenerativeModel(
             model_name='gemini-2.5-flash',
             generation_config=genai.types.GenerationConfig(temperature=0.7, max_output_tokens=1000),
-            system_instruction=system_prompt,
         )
 
-        # Build conversation contents using generate_content (avoids start_chat
-        # SDK validation quirks that produce "string did not match expected pattern")
-        contents = []
-        for m in (history or [])[-8:]:
+        # Build conversation history as inline text
+        history_text = ''
+        for m in (history or [])[-6:]:
             if m and m.get('role') in ('user', 'model') and m.get('parts'):
-                contents.append({'role': m['role'], 'parts': [str(m['parts'])[:500]]})
-        contents.append({'role': 'user', 'parts': [message.strip()]})
+                label = 'User' if m['role'] == 'user' else 'Assistant'
+                history_text += f'\n{label}: {str(m["parts"])[:400]}'
 
-        result = model.generate_content(contents)
+        full_prompt = (
+            f'{system_prompt}\n\n'
+            f'---\n\n'
+            f'CONVERSATION:{history_text}\n'
+            f'User: {message.strip()}\n'
+            f'Assistant:'
+        )
+
+        result = model.generate_content(full_prompt)
 
         return jsonify(reply=result.text.strip())
 
