@@ -509,7 +509,10 @@
   <div class="cook-mode-panel">
     <div class="cook-mode-header">
       <h2 class="cook-mode-title" id="cook-mode-title">🍳 Cooking Mode</h2>
-      <button class="cook-mode-close" onclick="closeCookMode()" aria-label="Exit cooking mode">✕ Exit</button>
+      <div class="cook-mode-actions">
+        <button class="cook-mode-ask-ai" onclick="openCookModeChat()" aria-label="Ask AI about this recipe">💬 Ask AI</button>
+        <button class="cook-mode-close" onclick="closeCookMode()" aria-label="Exit cooking mode">✕ Exit</button>
+      </div>
     </div>
     <div class="cook-mode-body" id="cook-mode-body"></div>
   </div>

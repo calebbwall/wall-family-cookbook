@@ -59,18 +59,23 @@ function clearDfMedia() {
 }
 
 // ── Cook Mode ────────────────────────────────────────────────────
+let _chatRecipeContext = '';
+
 function openCookMode(title, cardId) {
   const card = document.getElementById(cardId);
   const back = card ? card.querySelector('.flip-back') : null;
   const body = document.getElementById('cook-mode-body');
   document.getElementById('cook-mode-title').textContent = '🍳 ' + title;
+  _chatRecipeContext = title;
   body.innerHTML = '';
   if (back) {
     const clone = back.cloneNode(true);
     const backHeader = clone.querySelector('.back-header');
     if (backHeader) backHeader.remove();
+    // Remove existing ingredient checkboxes from the clone to avoid duplicates
+    clone.querySelectorAll('.ing-check').forEach(cb => cb.remove());
     body.appendChild(clone);
-    // Re-add ingredient checkboxes for cook mode
+    // Add fresh ingredient checkboxes
     clone.querySelectorAll('.b-ing-row').forEach(row => {
       const cb = document.createElement('input');
       cb.type = 'checkbox';
@@ -80,6 +85,16 @@ function openCookMode(title, cardId) {
       cb.addEventListener('click', e => e.stopPropagation());
       row.insertBefore(cb, row.firstChild);
     });
+    // Add tap-to-complete on steps
+    clone.querySelectorAll('.b-step').forEach(step => {
+      step.style.cursor = 'pointer';
+      step.setAttribute('role', 'checkbox');
+      step.setAttribute('aria-checked', 'false');
+      step.addEventListener('click', () => {
+        const done = step.classList.toggle('step-done');
+        step.setAttribute('aria-checked', done ? 'true' : 'false');
+      });
+    });
   }
   document.getElementById('cook-mode-overlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -88,11 +103,16 @@ function openCookMode(title, cardId) {
 function closeCookMode() {
   document.getElementById('cook-mode-overlay').style.display = 'none';
   document.body.style.overflow = '';
+  _chatRecipeContext = '';
 }
 
-function clearChatRecipeContext() {
-  document.getElementById('chat-recipe-context-bar').style.display = 'none';
-  document.getElementById('chat-recipe-name').textContent = '';
+function openCookModeChat() {
+  // Open the AI chat panel on top of cook mode, pre-loaded with recipe context
+  document.getElementById('chat-recipe-name').textContent = _chatRecipeContext;
+  document.getElementById('chat-recipe-context-bar').style.display = '';
+  if (!chatOpen) toggleChat();
+  document.getElementById('chat-messages').scrollTop = 99999;
+  document.getElementById('chat-input').focus();
 }
 
 // ── Card flipping ────────────────────────────────────────────────
@@ -591,7 +611,7 @@ async function sendChat() {
     const res  = await fetch('/api/chat', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ message, history: chatHistory, recipeContext: _cookNowTitle }),
+      body:    JSON.stringify({ message, history: chatHistory, recipeContext: _chatRecipeContext }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
