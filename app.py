@@ -695,7 +695,7 @@ _JSON_SCHEMA = """{
   "cook_time": "e.g. 30 min",
   "temperature": "e.g. 375°F — empty string if not applicable",
   "ingredients": [{"name": "ingredient", "amount": "quantity"}],
-  "steps": [{"title": "1-2 word step name e.g. Mix", "detail": "full step detail"}],
+  "steps": [{"title": "1-2 word step name e.g. Mix", "detail": "full step detail", "timer_secs": 0}],
   "calibration_notes": [{"goal": "e.g. Crispier", "tip": "short actionable tip"}],
   "storage": [{"method": "e.g. Refrigerator", "duration": "e.g. 3 days"}],
   "chefs_note": "one key pro tip or technique secret",
@@ -712,6 +712,26 @@ EXTRACTION_PROMPT = (
     "- confidence: 1.0=complete recipe, 0.5=partial, 0.2=very incomplete\n"
     "- Add warnings for missing ingredients, unclear steps, etc.\n"
     "- Category hint: {category_hint}\n\n"
+    "timer_secs rules (IMPORTANT — be very selective):\n"
+    "- Set timer_secs ONLY when the cook must actively wait while something runs (baking, roasting,\n"
+    "  simmering, boiling, resting, marinating, chilling, proofing, frying, steaming).\n"
+    "- Use the MAXIMUM of any time range (e.g. '20-25 minutes' → 1500).\n"
+    "- Set to 0 for steps that are just actions: chopping, mixing, seasoning, plating, preheating,\n"
+    "  adding ingredients, or any step that mentions a time only as context (e.g. 'a 30-minute recipe').\n"
+    "- Do NOT set a timer just because a number appears in the step.\n\n"
+    "calibration_notes rules (REQUIRED — always include 2–4):\n"
+    "- Each note must be recipe-specific and actionable (NOT generic advice like 'add more salt').\n"
+    "- goal: a 1–3 word outcome the cook wants (e.g. 'Crispier Crust', 'Richer Sauce', 'Less Sweet').\n"
+    "- tip: exactly how to achieve it for THIS dish (e.g. 'Broil the last 3 min', 'Sub heavy cream for milk').\n"
+    "- Infer these from the recipe technique if not stated — every recipe has room to tweak.\n\n"
+    "storage rules (REQUIRED — always include 2–3 options):\n"
+    "- Always include at least: Refrigerator and one of Freezer or Counter, with specific durations.\n"
+    "- Use real durations (e.g. 'Up to 4 days', 'Up to 3 months') — never vague like 'a few days'.\n\n"
+    "chefs_note rules (REQUIRED — must be specific and insightful):\n"
+    "- Write exactly ONE sentence with a specific pro tip, flavor secret, or key technique for THIS dish.\n"
+    "- It must be recipe-specific, not generic (e.g. NOT 'Season to taste').\n"
+    "- Examples: 'Letting the dough rest overnight cold-ferments it for a deeper, more complex flavor.'\n"
+    "  or 'Browning the butter before adding it gives the sauce a rich, nutty depth.'\n\n"
     "Recipe content:\n---\n{content}\n---"
 )
 
@@ -721,6 +741,11 @@ PHOTO_EXTRACTION_PROMPT = (
     + _JSON_SCHEMA
     + "\n\nIf the image is blurry or doesn't clearly show a recipe, "
     "set confidence below 0.3 and add a warning.\n"
+    "Apply the same timer_secs, calibration_notes, storage, and chefs_note rules as for text extraction:\n"
+    "- timer_secs: only for steps where the cook actively waits (baking, simmering, resting, etc.) — 0 otherwise.\n"
+    "- calibration_notes: always 2–4 recipe-specific, actionable tweaks.\n"
+    "- storage: always 2–3 options with specific durations.\n"
+    "- chefs_note: one specific, insightful pro tip for this exact dish.\n"
     "Category hint: {category_hint}"
 )
 
@@ -800,7 +825,9 @@ def build_card_html_from_json(recipe_json: dict, card_id: str,
     for i, step in enumerate(r.get('steps', []), 1):
         t = esc(step.get('title', ''))
         d = esc(step.get('detail', ''))
-        steps_html += (f'\n        <div class="b-step">'
+        timer_secs = int(step.get('timer_secs') or 0)
+        timer_attr = f' data-timer-secs="{timer_secs}"' if timer_secs > 0 else ''
+        steps_html += (f'\n        <div class="b-step"{timer_attr}>'
                        f'<span class="b-step-num">{i}</span>'
                        f'<p class="b-step-text"><span class="b-step-title">{t}.</span> {d}</p>'
                        f'</div>')
