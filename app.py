@@ -188,9 +188,26 @@ def build_page():
 
         injection = ''
         if section_cards:
-            # Fix any cards saved with the old openCookNow() onclick (renamed to openCookMode)
-            fixed_htmls = [r['card_html'].replace('openCookNow(', 'openCookMode(')
-                           for r in section_cards]
+            # Patch legacy cards: fix old onclick name and inject missing Cook Now buttons
+            fixed_htmls = []
+            for r in section_cards:
+                ch = r['card_html']
+                # Fix old function name saved in DB
+                ch = ch.replace('openCookNow(', 'openCookMode(')
+                # Add Cook Now button to old cards that have back-header but no cook-now-btn
+                if 'back-header' in ch and 'cook-now-btn' not in ch and 'back-flip-btn' in ch:
+                    card_id_m = re.search(r'<div class="flip-card" id="([^"]+)"', ch)
+                    cid = card_id_m.group(1) if card_id_m else ''
+                    cook_btn_html = (
+                        f'<button class="cook-now-btn" '
+                        f'onclick="event.stopPropagation();openCookMode('
+                        f'this.closest(\'.flip-card\').querySelector(\'.back-title\')?.textContent||\'\','
+                        f'\'{cid}\')" '
+                        f'title="Get AI help with this recipe">\U0001f373 Cook Now</button>'
+                    )
+                    # Insert right before the existing flip-back button
+                    ch = ch.replace('<button class="back-flip-btn"', cook_btn_html + '<button class="back-flip-btn"', 1)
+                fixed_htmls.append(ch)
             cards_html = '\n    '.join(fixed_htmls)
             injection  = f'\n  <div class="card-grid">\n    {cards_html}\n  </div>\n  '
 
@@ -452,9 +469,14 @@ def card_template(card_id, author_name):
     <div class="flip-back">
       <div class="back-header">
         <div class="back-title">[Recipe Title]</div>
-        <button class="back-flip-btn"
-                onclick="event.stopPropagation(); toggleFlip(document.getElementById('{card_id}'))"
-                title="Flip back">&#8634;</button>
+        <div class="back-header-actions">
+          <button class="cook-now-btn"
+                  onclick="event.stopPropagation(); openCookMode(this.closest('.flip-card').querySelector('.back-title')?.textContent||'', '{card_id}')"
+                  title="Get AI help with this recipe">🍳 Cook Now</button>
+          <button class="back-flip-btn"
+                  onclick="event.stopPropagation(); toggleFlip(document.getElementById('{card_id}'))"
+                  title="Flip back">&#8634;</button>
+        </div>
       </div>
       <div class="back-scroll">
 
