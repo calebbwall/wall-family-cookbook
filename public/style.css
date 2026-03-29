@@ -679,18 +679,20 @@ nav {
 }
 
 .cook-now-btn {
-  background: rgba(255,255,255,0.18);
-  border: 1px solid rgba(255,255,255,0.35);
+  background: var(--red);
+  border: none;
   color: var(--white);
-  padding: 0.3rem 0.7rem;
+  padding: 0.35rem 0.85rem;
   border-radius: 20px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, box-shadow 0.2s;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.45);
+  letter-spacing: 0.02em;
 }
-.cook-now-btn:hover { background: rgba(255,255,255,0.32); }
+.cook-now-btn:hover { background: #c0392b; box-shadow: 0 3px 12px rgba(220, 53, 69, 0.6); }
 
 .back-scroll {
   flex: 1;
