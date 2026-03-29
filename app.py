@@ -188,7 +188,10 @@ def build_page():
 
         injection = ''
         if section_cards:
-            cards_html = '\n    '.join(r['card_html'] for r in section_cards)
+            # Fix any cards saved with the old openCookNow() onclick (renamed to openCookMode)
+            fixed_htmls = [r['card_html'].replace('openCookNow(', 'openCookMode(')
+                           for r in section_cards]
+            cards_html = '\n    '.join(fixed_htmls)
             injection  = f'\n  <div class="card-grid">\n    {cards_html}\n  </div>\n  '
 
         html = re.sub(
