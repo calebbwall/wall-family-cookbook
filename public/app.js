@@ -90,8 +90,18 @@ let _chatRecipeContext = '';
 let _cookSteps        = [];   // { num, text, timerSecs } for step-zoom nav
 let _cookStepIndex    = 0;    // current step in step-zoom overlay
 let _stepTimers       = {};   // stepIndex → { remaining, interval, btn, display }
-let _cookBaseServings = 1;    // original serving count parsed from card
-let _cookCurServings  = 1;    // current (user-adjusted) serving count
+let _cookBaseServings  = 1;    // original serving count parsed from card
+let _cookCurServings   = 1;    // current (user-adjusted) serving count
+let _cookCurrentCardId = null; // card ID currently open in cook mode
+
+// ── Analytics ────────────────────────────────────────────────────
+function track(event, data = {}) {
+  try {
+    // Extend with real analytics (window.gtag, posthog, etc.) as needed
+    if (typeof window._wfcTrack === 'function') window._wfcTrack(event, data);
+    console.debug('[track]', event, data);
+  } catch (e) { /* never throw */ }
+}
 
 // ── Fraction helpers ──────────────────────────────────────────────
 const _FRAC_MAP = {
@@ -172,15 +182,19 @@ function _updateServings(delta) {
   document.getElementById('cm-serv-count').textContent = next;
   const ratio = next / _cookBaseServings;
   document.querySelectorAll('#cook-mode-body .b-ing-row').forEach(row => {
-    const orig = row.dataset.originalText;
-    if (orig !== undefined) {
-      // find the text node(s) - preserve any child elements (checkboxes)
-      const cb = row.querySelector('input.ing-check');
-      row.innerHTML = '';
-      if (cb) row.appendChild(cb);
-      row.appendChild(document.createTextNode(_scaleIngText(orig, ratio)));
-    }
+    const origAmt = row.dataset.originalAmount;
+    if (origAmt === undefined) return;
+    const amtEl = row.querySelector('.b-ing-amt');
+    if (amtEl) amtEl.textContent = origAmt ? _scaleIngText(origAmt, ratio) : '';
   });
+  track('servings_changed', { servings: next });
+  if (_cookCurrentCardId) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`cook_progress_${_cookCurrentCardId}`) || '{}');
+      saved.servings = next;
+      localStorage.setItem(`cook_progress_${_cookCurrentCardId}`, JSON.stringify(saved));
+    } catch (e) { /* storage unavailable */ }
+  }
 }
 
 // ── Time parser for step timers ───────────────────────────────────
@@ -345,12 +359,15 @@ function openCookMode(title, cardId) {
   Object.values(_stepTimers).forEach(t => { if (t.interval) clearInterval(t.interval); });
   _stepTimers = {};
   _cookSteps  = [];
+  _cookCurrentCardId = cardId;
 
   const card = document.getElementById(cardId);
   const back = card ? card.querySelector('.flip-back') : null;
   const body = document.getElementById('cook-mode-body');
   document.getElementById('cook-mode-title').textContent = '🍳 ' + title;
   body.innerHTML = '';
+
+  track('cook_now_started', { recipeId: cardId, title });
 
   if (back) {
     // ── Parse base servings from the yield stat ──────────────────
@@ -372,10 +389,11 @@ function openCookMode(title, cardId) {
     clone.querySelectorAll('.ing-check').forEach(cb => cb.remove());
     body.appendChild(clone);
 
-    // ── Ingredient checkboxes + store original text ──────────────
+    // ── Ingredient checkboxes + store original amount ────────────
     clone.querySelectorAll('.b-ing-row').forEach(row => {
-      // Store original text for scaling (text only, no child nodes)
-      row.dataset.originalText = row.textContent.trim();
+      // Store original amount text for scaling (amount span only, not name)
+      const amtEl = row.querySelector('.b-ing-amt');
+      row.dataset.originalAmount = amtEl ? amtEl.textContent.trim() : '';
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.className = 'ing-check';
@@ -384,6 +402,15 @@ function openCookMode(title, cardId) {
       cb.addEventListener('click', e => e.stopPropagation());
       row.insertBefore(cb, row.firstChild);
     });
+
+    // ── Restore saved servings from localStorage ──────────────────
+    try {
+      const saved = JSON.parse(localStorage.getItem(`cook_progress_${cardId}`) || '{}');
+      if (saved.servings && saved.servings !== (parseInt(yieldTxt, 10) || 0)) {
+        const diff = saved.servings - _cookBaseServings;
+        if (diff !== 0) _updateServings(diff);
+      }
+    } catch (e) { /* storage unavailable */ }
 
     // ── Steps: tap-to-complete + timer + zoom button ─────────────
     clone.querySelectorAll('.b-step').forEach((step, idx) => {
@@ -408,6 +435,7 @@ function openCookMode(title, cardId) {
         if (e.target.closest('.step-timer-btn') || e.target.closest('.step-zoom-btn')) return;
         const done = step.classList.toggle('step-done');
         step.setAttribute('aria-checked', done ? 'true' : 'false');
+        if (done) track('step_advanced', { step: idx + 1, total: _cookSteps.length });
       });
 
       // Timer button
@@ -457,6 +485,12 @@ function openCookMode(title, cardId) {
 }
 
 function closeCookMode() {
+  // Track recipe_completed if all steps were marked done
+  const allSteps = document.querySelectorAll('#cook-mode-body .b-step');
+  const doneSteps = document.querySelectorAll('#cook-mode-body .b-step.step-done');
+  if (allSteps.length > 0 && allSteps.length === doneSteps.length) {
+    track('recipe_completed', { recipeId: _cookCurrentCardId });
+  }
   // Stop all running timers
   Object.values(_stepTimers).forEach(t => { if (t.interval) clearInterval(t.interval); });
   _stepTimers = {};
@@ -466,6 +500,7 @@ function closeCookMode() {
   document.getElementById('step-zoom-overlay').style.display = 'none';
   document.body.style.overflow = '';
   _chatRecipeContext = '';
+  _cookCurrentCardId = null;
 }
 
 function openCookModeChat() {
@@ -1429,3 +1464,17 @@ document.querySelectorAll('.b-ing-row').forEach(row => {
   cb.addEventListener('click', e => e.stopPropagation()); // don't flip the card
   row.insertBefore(cb, row.firstChild);
 });
+
+// ── Step-zoom swipe navigation (mobile) ───────────────────────────
+(function _initStepZoomSwipe() {
+  const panel = document.querySelector('.step-zoom-panel');
+  if (!panel) return;
+  let _swipeStartX = 0;
+  panel.addEventListener('touchstart', e => {
+    _swipeStartX = e.touches[0].clientX;
+  }, { passive: true });
+  panel.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    if (Math.abs(dx) > 50) stepZoomNav(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
