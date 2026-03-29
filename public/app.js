@@ -426,8 +426,10 @@ function openCookMode(title, cardId) {
       const stepText = [titleEl?.textContent, textEl?.textContent]
         .filter(Boolean).map(s => s.trim()).join(' — ');
 
-      // Parse timer from step text
-      const timerSecs = _parseStepTime(stepText);
+      // Use AI-determined timer from data-timer-secs attribute (set at recipe creation).
+      // Falls back to text parsing only for legacy cards that predate the attribute.
+      const attrSecs = step.dataset.timerSecs !== undefined ? parseInt(step.dataset.timerSecs, 10) : -1;
+      const timerSecs = attrSecs > 0 ? attrSecs : (attrSecs === 0 ? null : _parseStepTime(stepText));
       _cookSteps.push({ num: stepNum, text: stepText, timerSecs });
 
       // Tap-to-complete (only when not clicking timer/zoom buttons)
