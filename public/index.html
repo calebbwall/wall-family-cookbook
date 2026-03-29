@@ -518,6 +518,29 @@
   </div>
 </div>
 
+<!-- Step Zoom Overlay -->
+<div id="step-zoom-overlay" class="step-zoom-overlay" onclick="if(event.target===this)closeStepZoom()" role="dialog" aria-modal="true" aria-labelledby="step-zoom-label">
+  <div class="step-zoom-panel">
+    <div class="step-zoom-header">
+      <span class="step-zoom-label" id="step-zoom-label">Step <span id="step-zoom-num">1</span> of <span id="step-zoom-total">1</span></span>
+      <button class="step-zoom-close" onclick="closeStepZoom()" aria-label="Close step view">✕</button>
+    </div>
+    <div class="step-zoom-body">
+      <div class="step-zoom-number" id="step-zoom-circle">1</div>
+      <div class="step-zoom-text" id="step-zoom-text"></div>
+      <div class="step-zoom-timer" id="step-zoom-timer" style="display:none">
+        <span class="step-zoom-timer-display" id="step-zoom-timer-display">0:00</span>
+        <button class="step-zoom-timer-btn" id="step-zoom-timer-btn" onclick="toggleStepZoomTimer()">▶ Start</button>
+        <button class="step-zoom-timer-reset" onclick="resetStepZoomTimer()">↺ Reset</button>
+      </div>
+    </div>
+    <div class="step-zoom-nav">
+      <button class="step-zoom-prev" onclick="stepZoomNav(-1)" aria-label="Previous step">← Prev</button>
+      <button class="step-zoom-next" onclick="stepZoomNav(1)" aria-label="Next step">Next →</button>
+    </div>
+  </div>
+</div>
+
 <!-- Chat FAB -->
 <button class="chat-fab" onclick="toggleChat()" title="Chat about recipes" aria-label="Open recipe assistant">💬</button>
 
