@@ -34,6 +34,10 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 app = Flask(__name__, static_folder='public', static_url_path='')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5 MB
 
+# Cache-busting version stamp — changes every deploy so browsers fetch fresh assets
+_JS_VER  = int((BASE_DIR / 'public' / 'app.js').stat().st_mtime)
+_CSS_VER = int((BASE_DIR / 'public' / 'style.css').stat().st_mtime)
+
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 PORT         = int(os.environ.get('PORT', 5000))
@@ -170,10 +174,11 @@ def build_page():
 
     total   = len(rows)
     t_label = '1 recipe' if total == 1 else f'{total} recipes'
-    html    = template_html.replace(
-        '<title>Wall Family Cookbook</title>',
-        f'<title>Wall Family Cookbook ({t_label})</title>'
-    )
+    html    = (template_html
+               .replace('<title>Wall Family Cookbook</title>',
+                        f'<title>Wall Family Cookbook ({t_label})</title>')
+               .replace('href="/style.css"', f'href="/style.css?v={_CSS_VER}"')
+               .replace('src="/app.js"',     f'src="/app.js?v={_JS_VER}"'))
 
     for section_key in SECTION_TO_CATEGORY:
         section_cards = [r for r in rows if SECTION_MAP.get(r['category']) == section_key]
