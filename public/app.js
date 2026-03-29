@@ -83,22 +83,295 @@ function clearDfMedia() {
 
 // ── Cook Mode ────────────────────────────────────────────────────
 let _chatRecipeContext = '';
+let _cookSteps        = [];   // { num, text, timerSecs } for step-zoom nav
+let _cookStepIndex    = 0;    // current step in step-zoom overlay
+let _stepTimers       = {};   // stepIndex → { remaining, interval, btn, display }
+let _cookBaseServings = 1;    // original serving count parsed from card
+let _cookCurServings  = 1;    // current (user-adjusted) serving count
 
+// ── Fraction helpers ──────────────────────────────────────────────
+const _FRAC_MAP = {
+  '\u00BC': 0.25, '\u00BD': 0.5,  '\u00BE': 0.75,
+  '\u2150': 1/7,  '\u2151': 1/9,  '\u2152': 1/10,
+  '\u2153': 1/3,  '\u2154': 2/3,
+  '\u2155': 1/5,  '\u2156': 2/5,  '\u2157': 3/5,  '\u2158': 4/5,
+  '\u2159': 1/6,  '\u215A': 5/6,
+  '\u215B': 1/8,  '\u215C': 3/8,  '\u215D': 5/8,  '\u215E': 7/8,
+};
+const _FRAC_CHARS = Object.keys(_FRAC_MAP).join('');
+
+function _parseFrac(str) {
+  // Parse a leading number token (int, decimal, slash-fraction, unicode frac, or mixed)
+  str = str.trim();
+  if (!str) return null;
+  // unicode fraction char alone or after integer e.g. "1½"
+  const mixedRe = new RegExp(`^(\\d+)?([${_FRAC_CHARS}])`);
+  const mixedM  = str.match(mixedRe);
+  if (mixedM) {
+    const whole = mixedM[1] ? parseInt(mixedM[1], 10) : 0;
+    return whole + _FRAC_MAP[mixedM[2]];
+  }
+  // slash fraction e.g. "3/4"
+  const slashM = str.match(/^(\d+)\/(\d+)/);
+  if (slashM) return parseInt(slashM[1], 10) / parseInt(slashM[2], 10);
+  // plain integer or decimal
+  const numM = str.match(/^(\d+(?:\.\d+)?)/);
+  if (numM) return parseFloat(numM[1]);
+  return null;
+}
+
+function _formatNum(n) {
+  // Format a number back to a clean fraction string where appropriate
+  if (n <= 0) return '0';
+  const eighths = Math.round(n * 8);
+  const whole   = Math.floor(eighths / 8);
+  const rem     = eighths % 8;
+  const fracStr = { 0:'', 1:'⅛', 2:'¼', 3:'⅜', 4:'½', 5:'⅝', 6:'¾', 7:'⅞' }[rem] || '';
+  if (whole === 0) return fracStr || '0';
+  return fracStr ? `${whole}${fracStr}` : `${whole}`;
+}
+
+// Leading-number regex: captures the number token + the rest of the string
+const _LEAD_NUM_RE = new RegExp(
+  `^(\\d+[${_FRAC_CHARS}]|[${_FRAC_CHARS}]|\\d+\\/\\d+|\\d+(?:\\.\\d+)?)(.*)$`,
+  's'
+);
+
+function _scaleIngText(originalText, ratio) {
+  const m = originalText.match(_LEAD_NUM_RE);
+  if (!m) return originalText;
+  const val = _parseFrac(m[1]);
+  if (val === null) return originalText;
+  return _formatNum(val * ratio) + m[2];
+}
+
+// ── Servings scaler UI ────────────────────────────────────────────
+function _buildServingsScaler(baseServings) {
+  _cookBaseServings = baseServings;
+  _cookCurServings  = baseServings;
+
+  const row = document.createElement('div');
+  row.className = 'cook-mode-servings';
+  row.innerHTML = `
+    <span class="cook-mode-servings-label">Servings</span>
+    <button class="cook-mode-servings-btn" id="cm-serv-minus" aria-label="Fewer servings">−</button>
+    <span class="cook-mode-servings-count" id="cm-serv-count">${baseServings}</span>
+    <button class="cook-mode-servings-btn" id="cm-serv-plus"  aria-label="More servings">+</button>
+  `;
+  return row;
+}
+
+function _updateServings(delta) {
+  const next = Math.max(1, _cookCurServings + delta);
+  if (next === _cookCurServings) return;
+  _cookCurServings = next;
+  document.getElementById('cm-serv-count').textContent = next;
+  const ratio = next / _cookBaseServings;
+  document.querySelectorAll('#cook-mode-body .b-ing-row').forEach(row => {
+    const orig = row.dataset.originalText;
+    if (orig !== undefined) {
+      // find the text node(s) - preserve any child elements (checkboxes)
+      const cb = row.querySelector('input.ing-check');
+      row.innerHTML = '';
+      if (cb) row.appendChild(cb);
+      row.appendChild(document.createTextNode(_scaleIngText(orig, ratio)));
+    }
+  });
+}
+
+// ── Time parser for step timers ───────────────────────────────────
+function _parseStepTime(text) {
+  // Returns total seconds if step mentions a duration, else null
+  let total = 0;
+  let found = false;
+  const re = /(\d+(?:\.\d+)?)\s*(?:-\s*\d+(?:\.\d+)?\s*)?(hours?|hrs?|h\b|minutes?|mins?|seconds?|secs?)/gi;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const val  = parseFloat(m[1]);
+    const unit = m[2].toLowerCase();
+    found = true;
+    if (unit.startsWith('h'))      total += val * 3600;
+    else if (unit.startsWith('m')) total += val * 60;
+    else                           total += val;
+  }
+  return found ? Math.round(total) : null;
+}
+
+function _fmtTime(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// ── Step timer management ─────────────────────────────────────────
+function _startStepTimer(idx) {
+  const t = _stepTimers[idx];
+  if (!t || t.interval) return;
+  t.btn.textContent = '⏸ ' + _fmtTime(t.remaining);
+  t.btn.classList.add('running');
+  t.interval = setInterval(() => {
+    t.remaining--;
+    const label = t.remaining <= 0 ? '✓ Done' : _fmtTime(t.remaining);
+    t.btn.textContent = t.remaining <= 0 ? '✓ Done' : '⏸ ' + label;
+    if (t.remaining <= 0) {
+      clearInterval(t.interval);
+      t.interval = null;
+      t.btn.classList.remove('running');
+      t.btn.classList.add('done');
+    }
+  }, 1000);
+}
+
+function _pauseStepTimer(idx) {
+  const t = _stepTimers[idx];
+  if (!t || !t.interval) return;
+  clearInterval(t.interval);
+  t.interval = null;
+  t.btn.classList.remove('running');
+  t.btn.textContent = '▶ ' + _fmtTime(t.remaining);
+}
+
+function _toggleStepTimer(idx) {
+  const t = _stepTimers[idx];
+  if (!t) return;
+  if (t.interval) _pauseStepTimer(idx); else _startStepTimer(idx);
+}
+
+// ── Step Zoom ─────────────────────────────────────────────────────
+let _stepZoomTimerInterval = null;
+let _stepZoomTimerRemaining = 0;
+let _stepZoomTimerRunning   = false;
+
+function openStepZoom(idx) {
+  _cookStepIndex = idx;
+  _renderStepZoom();
+  document.getElementById('step-zoom-overlay').style.display = 'flex';
+}
+
+function closeStepZoom() {
+  document.getElementById('step-zoom-overlay').style.display = 'none';
+  if (_stepZoomTimerInterval) { clearInterval(_stepZoomTimerInterval); _stepZoomTimerInterval = null; }
+  _stepZoomTimerRunning = false;
+}
+
+function _renderStepZoom() {
+  const step  = _cookSteps[_cookStepIndex];
+  if (!step) return;
+  const total = _cookSteps.length;
+  document.getElementById('step-zoom-num').textContent   = _cookStepIndex + 1;
+  document.getElementById('step-zoom-total').textContent = total;
+  document.getElementById('step-zoom-circle').textContent = _cookStepIndex + 1;
+  document.getElementById('step-zoom-text').textContent  = step.text;
+
+  // Disable prev/next at boundaries
+  document.querySelector('.step-zoom-prev').disabled = _cookStepIndex === 0;
+  document.querySelector('.step-zoom-next').disabled = _cookStepIndex === total - 1;
+
+  // Timer section
+  const timerDiv = document.getElementById('step-zoom-timer');
+  if (step.timerSecs) {
+    // Stop any running zoom timer first
+    if (_stepZoomTimerInterval) { clearInterval(_stepZoomTimerInterval); _stepZoomTimerInterval = null; }
+    _stepZoomTimerRunning   = false;
+    // Sync with inline timer if it exists
+    const inlineTimer = _stepTimers[_cookStepIndex];
+    _stepZoomTimerRemaining = inlineTimer ? inlineTimer.remaining : step.timerSecs;
+    document.getElementById('step-zoom-timer-display').textContent = _fmtTime(_stepZoomTimerRemaining);
+    document.getElementById('step-zoom-timer-btn').textContent = '▶ Start';
+    timerDiv.style.display = 'flex';
+  } else {
+    timerDiv.style.display = 'none';
+  }
+}
+
+function stepZoomNav(delta) {
+  const next = _cookStepIndex + delta;
+  if (next < 0 || next >= _cookSteps.length) return;
+  // Stop current zoom timer before navigating
+  if (_stepZoomTimerInterval) { clearInterval(_stepZoomTimerInterval); _stepZoomTimerInterval = null; }
+  _stepZoomTimerRunning = false;
+  _cookStepIndex = next;
+  _renderStepZoom();
+}
+
+function toggleStepZoomTimer() {
+  const btn = document.getElementById('step-zoom-timer-btn');
+  const display = document.getElementById('step-zoom-timer-display');
+  if (_stepZoomTimerRunning) {
+    clearInterval(_stepZoomTimerInterval);
+    _stepZoomTimerInterval = null;
+    _stepZoomTimerRunning  = false;
+    btn.textContent = '▶ ' + _fmtTime(_stepZoomTimerRemaining);
+  } else {
+    if (_stepZoomTimerRemaining <= 0) return;
+    _stepZoomTimerRunning = true;
+    btn.textContent = '⏸ ' + _fmtTime(_stepZoomTimerRemaining);
+    _stepZoomTimerInterval = setInterval(() => {
+      _stepZoomTimerRemaining--;
+      // Keep inline timer in sync
+      const inlineT = _stepTimers[_cookStepIndex];
+      if (inlineT) { inlineT.remaining = _stepZoomTimerRemaining; }
+      const label = _stepZoomTimerRemaining <= 0 ? '✓ Done' : _fmtTime(_stepZoomTimerRemaining);
+      display.textContent = label;
+      btn.textContent     = _stepZoomTimerRemaining <= 0 ? '✓ Done' : '⏸ ' + label;
+      if (_stepZoomTimerRemaining <= 0) {
+        clearInterval(_stepZoomTimerInterval);
+        _stepZoomTimerInterval = null;
+        _stepZoomTimerRunning  = false;
+      }
+    }, 1000);
+  }
+}
+
+function resetStepZoomTimer() {
+  if (_stepZoomTimerInterval) { clearInterval(_stepZoomTimerInterval); _stepZoomTimerInterval = null; }
+  _stepZoomTimerRunning = false;
+  const step = _cookSteps[_cookStepIndex];
+  if (!step || !step.timerSecs) return;
+  _stepZoomTimerRemaining = step.timerSecs;
+  const inlineT = _stepTimers[_cookStepIndex];
+  if (inlineT) { inlineT.remaining = step.timerSecs; inlineT.btn.textContent = '▶ ' + _fmtTime(step.timerSecs); }
+  document.getElementById('step-zoom-timer-display').textContent = _fmtTime(step.timerSecs);
+  document.getElementById('step-zoom-timer-btn').textContent = '▶ Start';
+}
+
+// ── Main openCookMode ─────────────────────────────────────────────
 function openCookMode(title, cardId) {
+  // Clear previous timer state
+  Object.values(_stepTimers).forEach(t => { if (t.interval) clearInterval(t.interval); });
+  _stepTimers = {};
+  _cookSteps  = [];
+
   const card = document.getElementById(cardId);
   const back = card ? card.querySelector('.flip-back') : null;
   const body = document.getElementById('cook-mode-body');
   document.getElementById('cook-mode-title').textContent = '🍳 ' + title;
   body.innerHTML = '';
+
   if (back) {
+    // ── Parse base servings from the yield stat ──────────────────
+    const yieldEl = back.querySelector('.back-stat-val');
+    const yieldTxt = yieldEl ? yieldEl.textContent.trim() : '';
+    const yieldNum = parseInt(yieldTxt, 10) || 0;
+
+    // ── Build servings scaler if we have a number ────────────────
+    if (yieldNum > 0) {
+      const scalerRow = _buildServingsScaler(yieldNum);
+      scalerRow.querySelector('#cm-serv-minus').addEventListener('click', e => { e.stopPropagation(); _updateServings(-1); });
+      scalerRow.querySelector('#cm-serv-plus').addEventListener('click',  e => { e.stopPropagation(); _updateServings(+1); });
+      body.appendChild(scalerRow);
+    }
+
     const clone = back.cloneNode(true);
     const backHeader = clone.querySelector('.back-header');
     if (backHeader) backHeader.remove();
-    // Remove existing ingredient checkboxes from the clone to avoid duplicates
     clone.querySelectorAll('.ing-check').forEach(cb => cb.remove());
     body.appendChild(clone);
-    // Add fresh ingredient checkboxes
+
+    // ── Ingredient checkboxes + store original text ──────────────
     clone.querySelectorAll('.b-ing-row').forEach(row => {
+      // Store original text for scaling (text only, no child nodes)
+      row.dataset.originalText = row.textContent.trim();
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.className = 'ing-check';
@@ -107,37 +380,86 @@ function openCookMode(title, cardId) {
       cb.addEventListener('click', e => e.stopPropagation());
       row.insertBefore(cb, row.firstChild);
     });
-    // Add tap-to-complete on steps
-    clone.querySelectorAll('.b-step').forEach(step => {
+
+    // ── Steps: tap-to-complete + timer + zoom button ─────────────
+    clone.querySelectorAll('.b-step').forEach((step, idx) => {
       step.style.cursor = 'pointer';
       step.setAttribute('role', 'checkbox');
       step.setAttribute('aria-checked', 'false');
-      step.addEventListener('click', () => {
+
+      // Gather step text (title + body)
+      const titleEl = step.querySelector('.b-step-title');
+      const textEl  = step.querySelector('.b-step-text');
+      const numEl   = step.querySelector('.b-step-num');
+      const stepNum = numEl ? numEl.textContent.trim() : String(idx + 1);
+      const stepText = [titleEl?.textContent, textEl?.textContent]
+        .filter(Boolean).map(s => s.trim()).join(' — ');
+
+      // Parse timer from step text
+      const timerSecs = _parseStepTime(stepText);
+      _cookSteps.push({ num: stepNum, text: stepText, timerSecs });
+
+      // Tap-to-complete (only when not clicking timer/zoom buttons)
+      step.addEventListener('click', e => {
+        if (e.target.closest('.step-timer-btn') || e.target.closest('.step-zoom-btn')) return;
         const done = step.classList.toggle('step-done');
         step.setAttribute('aria-checked', done ? 'true' : 'false');
       });
+
+      // Timer button
+      if (timerSecs) {
+        const label = timerSecs >= 3600
+          ? _fmtTime(timerSecs).replace(/^0:/, '')
+          : _fmtTime(timerSecs);
+        const timerBtn = document.createElement('button');
+        timerBtn.className = 'step-timer-btn';
+        timerBtn.textContent = `⏱ ${label}`;
+        timerBtn.setAttribute('aria-label', `Start ${label} timer`);
+        _stepTimers[idx] = { remaining: timerSecs, interval: null, btn: timerBtn, display: null };
+        timerBtn.addEventListener('click', e => { e.stopPropagation(); _toggleStepTimer(idx); });
+        // Insert after step number
+        if (numEl && numEl.nextSibling) step.insertBefore(timerBtn, numEl.nextSibling);
+        else step.appendChild(timerBtn);
+      }
+
+      // Zoom button
+      const zoomBtn = document.createElement('button');
+      zoomBtn.className = 'step-zoom-btn';
+      zoomBtn.textContent = '⤢';
+      zoomBtn.title = 'Focus this step';
+      zoomBtn.setAttribute('aria-label', 'Zoom step');
+      zoomBtn.addEventListener('click', e => { e.stopPropagation(); openStepZoom(idx); });
+      step.appendChild(zoomBtn);
     });
 
-    // Build full recipe context for AI: title + temp/time + ingredients + steps
-    const tempEl  = back.querySelector('.b-temp');
-    const timeEl  = back.querySelector('.b-time');
-    const ings    = [...back.querySelectorAll('.b-ing-row')]
-                      .map(r => r.innerText.trim()).filter(Boolean);
-    const steps   = [...back.querySelectorAll('.b-step')]
-                      .map(s => s.innerText.trim()).filter(Boolean);
+    // ── Build AI context ─────────────────────────────────────────
+    const tempEl = back.querySelector('.b-temp');
+    const timeEl = back.querySelector('.b-time');
+    const ings   = [...back.querySelectorAll('.b-ing-row')]
+                     .map(r => r.textContent.trim()).filter(Boolean);
+    const steps  = [...back.querySelectorAll('.b-step')]
+                     .map(s => s.textContent.trim()).filter(Boolean);
     let ctx = `Recipe: ${title}`;
-    if (tempEl) ctx += `\nTemp: ${tempEl.innerText.trim()}`;
-    if (timeEl) ctx += `\nTime: ${timeEl.innerText.trim()}`;
-    if (ings.length)  ctx += `\nIngredients:\n${ings.map(i => '- ' + i).join('\n')}`;
-    if (steps.length) ctx += `\nInstructions:\n${steps.map((s, i) => `${i+1}. ${s}`).join('\n')}`;
+    if (yieldTxt)       ctx += `\nServings: ${yieldTxt}`;
+    if (tempEl)         ctx += `\nTemp: ${tempEl.textContent.trim()}`;
+    if (timeEl)         ctx += `\nTime: ${timeEl.textContent.trim()}`;
+    if (ings.length)    ctx += `\nIngredients:\n${ings.map(i => '- ' + i).join('\n')}`;
+    if (steps.length)   ctx += `\nInstructions:\n${steps.map((s, i) => `${i+1}. ${s}`).join('\n')}`;
     _chatRecipeContext = ctx;
   }
+
   document.getElementById('cook-mode-overlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
 
 function closeCookMode() {
+  // Stop all running timers
+  Object.values(_stepTimers).forEach(t => { if (t.interval) clearInterval(t.interval); });
+  _stepTimers = {};
+  if (_stepZoomTimerInterval) { clearInterval(_stepZoomTimerInterval); _stepZoomTimerInterval = null; }
+  _stepZoomTimerRunning = false;
   document.getElementById('cook-mode-overlay').style.display = 'none';
+  document.getElementById('step-zoom-overlay').style.display = 'none';
   document.body.style.overflow = '';
   _chatRecipeContext = '';
 }

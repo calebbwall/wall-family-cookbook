@@ -1557,7 +1557,7 @@ footer strong {
   padding: 0.6rem 0.85rem;
   color: var(--white);
   -webkit-text-fill-color: var(--white);
-  font-size: 0.85rem;
+  font-size: 1rem; /* ≥16px prevents iOS auto-zoom on focus */
   font-family: 'Lato', sans-serif;
   outline: none;
   resize: none;
@@ -1706,6 +1706,233 @@ footer strong {
   flex: none;
 }
 @media (max-width: 600px) { .cook-mode-body { padding: 1rem; } }
+
+/* ── Cook Mode: Servings Scaler ──────────────────────────────── */
+.cook-mode-servings {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--white);
+}
+.cook-mode-servings-label { color: var(--muted); }
+.cook-mode-servings-count {
+  font-weight: 700;
+  font-size: 1.1rem;
+  min-width: 2rem;
+  text-align: center;
+}
+.cook-mode-servings-btn {
+  background: var(--red);
+  border: none;
+  color: var(--white);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.cook-mode-servings-btn:hover { background: #c0392b; }
+
+/* ── Cook Mode: Step Timer Button ────────────────────────────── */
+.step-timer-btn {
+  background: none;
+  border: 1px solid var(--red);
+  color: var(--red);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-family: 'Lato', sans-serif;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: background 0.15s, color 0.15s;
+}
+.step-timer-btn.running {
+  background: var(--red);
+  color: var(--white);
+}
+.step-timer-btn.done {
+  border-color: var(--muted);
+  color: var(--muted);
+  cursor: default;
+}
+
+/* ── Cook Mode: Step Zoom Button ─────────────────────────────── */
+.b-step { display: flex; align-items: flex-start; flex-wrap: wrap; }
+.step-zoom-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.1rem 0.35rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: color 0.15s;
+  line-height: 1;
+  align-self: center;
+}
+.step-zoom-btn:hover { color: var(--white); }
+
+/* ── Step Zoom Overlay ───────────────────────────────────────── */
+.step-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(0,0,0,0.88);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.step-zoom-panel {
+  background: var(--dark);
+  width: min(560px, 96vw);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 90dvh;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+}
+.step-zoom-header {
+  background: var(--red);
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.step-zoom-label {
+  color: var(--white);
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: 'Lato', sans-serif;
+}
+.step-zoom-close {
+  background: none;
+  border: none;
+  color: var(--white);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.step-zoom-close:hover { background: rgba(255,255,255,0.2); }
+.step-zoom-body {
+  padding: 2rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  flex: 1;
+  overflow-y: auto;
+}
+.step-zoom-number {
+  background: var(--red);
+  color: var(--white);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.step-zoom-text {
+  font-size: 1.2rem;
+  line-height: 1.7;
+  text-align: center;
+  color: var(--white);
+  font-family: 'Lato', sans-serif;
+}
+.step-zoom-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+.step-zoom-timer-display {
+  font-size: 2.4rem;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--red);
+  min-width: 5rem;
+  text-align: center;
+}
+.step-zoom-timer-btn {
+  background: var(--red);
+  border: none;
+  color: var(--white);
+  padding: 0.55rem 1.2rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.step-zoom-timer-btn:hover { background: #c0392b; }
+.step-zoom-timer-reset {
+  background: none;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: 'Lato', sans-serif;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.step-zoom-timer-reset:hover { border-color: var(--white); color: var(--white); }
+.step-zoom-nav {
+  display: flex;
+  padding: 1rem 1.25rem;
+  gap: 0.75rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.step-zoom-prev,
+.step-zoom-next {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.step-zoom-prev {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--white);
+}
+.step-zoom-prev:hover:not(:disabled) { background: rgba(255,255,255,0.16); }
+.step-zoom-next {
+  background: var(--red);
+  border: none;
+  color: var(--white);
+}
+.step-zoom-next:hover:not(:disabled) { background: #c0392b; }
+.step-zoom-prev:disabled,
+.step-zoom-next:disabled { opacity: 0.35; cursor: default; }
 
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 600px) {
