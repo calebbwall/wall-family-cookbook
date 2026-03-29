@@ -703,7 +703,7 @@ PHOTO_EXTRACTION_PROMPT = (
 def extract_recipe_with_gemini(content: str = '', category_hint: str = '',
                                 image_data: str = '', image_mime: str = 'image/jpeg') -> dict:
     """Call Gemini once to extract a recipe as structured JSON. Returns parsed dict."""
-    gen_cfg = {'temperature': 0.2, 'maxOutputTokens': 4000,
+    gen_cfg = {'temperature': 0.2, 'maxOutputTokens': 8192,
                'responseMimeType': 'application/json'}
 
     if image_data:

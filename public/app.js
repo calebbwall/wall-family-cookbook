@@ -82,6 +82,10 @@ function clearDfMedia() {
 }
 
 // ── Cook Mode ────────────────────────────────────────────────────
+// Backward-compat alias: old recipe cards saved in DB call openCookNow()
+// eslint-disable-next-line no-unused-vars
+function openCookNow(title, cardId) { openCookMode(title, cardId); }
+
 let _chatRecipeContext = '';
 let _cookSteps        = [];   // { num, text, timerSecs } for step-zoom nav
 let _cookStepIndex    = 0;    // current step in step-zoom overlay
