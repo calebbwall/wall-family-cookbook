@@ -1417,7 +1417,7 @@
       <select id="recipe-category" name="category" required>
         <option value="">Choose a category…</option>
         <option value="appetizer">Appetizer</option>
-        <option value="entree">Entrée / Lunch</option>
+        <option value="entree">Entrée</option>
         <option value="side">Side Dish</option>
         <option value="snack">Snack</option>
         <option value="breakfast">Breakfast</option>
@@ -1458,6 +1458,10 @@
   <div class="chat-panel-header">
     <span class="chat-panel-title">📖 Recipe Assistant</span>
     <button class="chat-panel-close" onclick="toggleChat()" title="Close">✕</button>
+  </div>
+  <div class="chat-recipe-context-bar" id="chat-recipe-context-bar" style="display:none">
+    <span id="chat-recipe-name"></span>
+    <button onclick="clearChatRecipeContext()" title="Clear recipe context">✕</button>
   </div>
   <div class="chat-messages" id="chat-messages">
     <div class="chat-msg chat-msg-assistant">
@@ -2003,5 +2007,6 @@
   });
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 </body>
 </html>

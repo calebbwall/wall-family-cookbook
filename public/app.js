@@ -1336,7 +1336,16 @@ function appendChatMessage(role, text) {
   const messages = document.getElementById('chat-messages');
   const div      = document.createElement('div');
   div.className  = 'chat-msg chat-msg-' + (role === 'user' ? 'user' : 'assistant');
-  div.textContent = text;
+  if (role === 'user') {
+    div.textContent = text;
+  } else {
+    // Render markdown for assistant responses
+    if (typeof marked !== 'undefined') {
+      div.innerHTML = marked.parse(text, { breaks: true, gfm: true });
+    } else {
+      div.textContent = text;
+    }
+  }
   messages.appendChild(div);
   messages.scrollTop = messages.scrollHeight;
   return div;
