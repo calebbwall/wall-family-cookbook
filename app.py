@@ -122,6 +122,39 @@ def ensure_table():
         cur.execute("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS recipe_json TEXT")
         cur.execute("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'manual'")
 
+        # ── Households table ──────────────────────────────────────────
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS households (
+                id         SERIAL PRIMARY KEY,
+                name       TEXT UNIQUE NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Seed default households (idempotent)
+        _DEFAULT_HOUSEHOLDS = [
+            ('Caleb & Ally', 0),
+            ('Scot & Darcy', 1),
+            ('Dillon & Marissa', 2),
+            ('Chris & Jessica', 3),
+            ('Angel', 4),
+            ('Guest', 999),
+        ]
+        for name, order in _DEFAULT_HOUSEHOLDS:
+            cur.execute(
+                "INSERT INTO households (name, sort_order) VALUES (%s, %s) ON CONFLICT (name) DO NOTHING",
+                (name, order)
+            )
+
+        # ── Grocery state table (per-household) ──────────────────────
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS grocery_state (
+                household  TEXT PRIMARY KEY,
+                state_json TEXT NOT NULL DEFAULT '{}',
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
 
 def migrate_from_old_table():
     try:
@@ -252,7 +285,29 @@ def require_auth(f):
     return decorated
 
 
+def _get_households():
+    """Fetch all households ordered by sort_order."""
+    try:
+        with db_cursor() as cur:
+            cur.execute('SELECT name FROM households ORDER BY sort_order ASC, created_at ASC')
+            return [r['name'] for r in cur.fetchall()]
+    except Exception:
+        return ['Caleb & Ally', 'Scot & Darcy', 'Dillon & Marissa',
+                'Chris & Jessica', 'Angel', 'Guest']
+
+
+def get_current_household():
+    """Return the household name from the cookie, defaulting to Guest."""
+    return request.cookies.get('wfc_household', 'Guest')
+
+
 def build_gate_page(error_msg=''):
+    import html as html_mod
+    households = _get_households()
+    options_html = '\n      '.join(
+        f'<option value="{html_mod.escape(h)}">{html_mod.escape(h)}</option>'
+        for h in households
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -299,7 +354,7 @@ def build_gate_page(error_msg=''):
       font-style: italic;
       margin-bottom: 2.2rem;
     }}
-    .gate-input {{
+    .gate-input, .gate-select {{
       width: 100%;
       border: 1.5px solid var(--tan-dark);
       border-radius: 8px;
@@ -309,11 +364,12 @@ def build_gate_page(error_msg=''):
       background: var(--white);
       color: var(--dark);
       text-align: center;
-      letter-spacing: 0.06em;
       outline: none;
       transition: border-color 0.15s;
     }}
-    .gate-input:focus {{ border-color: var(--red); }}
+    .gate-input {{ letter-spacing: 0.06em; }}
+    .gate-select {{ margin-top: 0.75rem; cursor: pointer; text-align-last: center; }}
+    .gate-input:focus, .gate-select:focus {{ border-color: var(--red); }}
     .gate-btn {{
       display: block;
       width: 100%;
@@ -343,6 +399,39 @@ def build_gate_page(error_msg=''):
       background: var(--red);
       margin: 1.4rem auto 1.8rem;
     }}
+    .gate-add-row {{
+      margin-top: 1.2rem;
+    }}
+    .gate-add-toggle {{
+      background: none; border: none; color: var(--muted); font-size: 0.82rem;
+      cursor: pointer; text-decoration: underline; font-family: 'Lato', sans-serif;
+    }}
+    .gate-add-toggle:hover {{ color: var(--red); }}
+    .gate-add-form {{
+      margin-top: 0.6rem;
+      display: flex;
+      gap: 0.5rem;
+    }}
+    .gate-add-form input {{
+      flex: 1;
+      border: 1.5px solid var(--tan-dark);
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.88rem;
+      font-family: 'Lato', sans-serif;
+      outline: none;
+    }}
+    .gate-add-form input:focus {{ border-color: var(--red); }}
+    .gate-add-form button {{
+      background: var(--red); color: var(--white); border: none;
+      border-radius: 8px; padding: 0.6rem 1.1rem; font-size: 0.82rem;
+      font-weight: 700; cursor: pointer; text-transform: uppercase;
+      letter-spacing: 0.05em; white-space: nowrap;
+    }}
+    .gate-add-form button:hover {{ background: var(--red-light); }}
+    .gate-add-msg {{
+      font-size: 0.78rem; margin-top: 0.4rem; min-height: 1.1em;
+    }}
   </style>
 </head>
 <body>
@@ -352,12 +441,52 @@ def build_gate_page(error_msg=''):
     <div class="gate-rule"></div>
     <p class="gate-sub">Family recipes, just for us.</p>
     <form method="POST" action="/api/login">
-      <input class="gate-input" type="password" name="passphrase"
+      <input class="gate-input" type="password" name="passphrase" id="gate-pass"
              placeholder="Enter passphrase" autofocus autocomplete="current-password"/>
+      <select class="gate-select" name="household" required>
+        <option value="" disabled selected>Select your household</option>
+        {options_html}
+      </select>
       <button class="gate-btn" type="submit">Enter the Cookbook</button>
       <p class="gate-error">{error_msg}</p>
     </form>
+    <div class="gate-add-row">
+      <button type="button" class="gate-add-toggle" onclick="document.getElementById('gate-add-form').style.display=this.style.display='none';document.getElementById('gate-add-form').style.display='flex';">+ Add Household</button>
+      <div class="gate-add-form" id="gate-add-form" style="display:none">
+        <input type="text" id="gate-new-hh" placeholder="Household name" maxlength="40"/>
+        <button type="button" onclick="addHousehold()">Add</button>
+      </div>
+      <p class="gate-add-msg" id="gate-add-msg"></p>
+    </div>
   </div>
+  <script>
+    async function addHousehold() {{
+      const name = document.getElementById('gate-new-hh').value.trim();
+      const pass = document.getElementById('gate-pass').value;
+      const msg  = document.getElementById('gate-add-msg');
+      if (!name) {{ msg.textContent = 'Please enter a household name.'; msg.style.color = 'var(--red)'; return; }}
+      if (!pass) {{ msg.textContent = 'Enter the passphrase first.'; msg.style.color = 'var(--red)'; return; }}
+      try {{
+        const res = await fetch('/api/add-household', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ name, passphrase: pass }})
+        }});
+        const data = await res.json();
+        if (res.ok) {{
+          msg.textContent = 'Added! Refreshing…';
+          msg.style.color = 'var(--brown)';
+          setTimeout(() => location.reload(), 600);
+        }} else {{
+          msg.textContent = data.error || 'Something went wrong.';
+          msg.style.color = 'var(--red)';
+        }}
+      }} catch (e) {{
+        msg.textContent = 'Network error — try again.';
+        msg.style.color = 'var(--red)';
+      }}
+    }}
+  </script>
 </body>
 </html>"""
 
@@ -1007,7 +1136,8 @@ def build_recipe_catalog(rows):
 @app.post('/api/login')
 def login():
     passphrase = request.form.get('passphrase', '')
-    if make_auth_token(passphrase) == VALID_TOKEN:
+    household  = request.form.get('household', '').strip()
+    if make_auth_token(passphrase) == VALID_TOKEN and household:
         resp = make_response(redirect('/', 302))
         resp.set_cookie(
             COOKIE_NAME, VALID_TOKEN,
@@ -1017,14 +1147,45 @@ def login():
             secure=True,
             path='/'
         )
+        # Household cookie — readable by frontend JS (not httponly)
+        resp.set_cookie(
+            'wfc_household', household,
+            max_age=COOKIE_MAX_AGE,
+            samesite='None',
+            secure=True,
+            path='/'
+        )
         return resp
-    return make_response(build_gate_page('Incorrect passphrase — try again.'), 401)
+    if make_auth_token(passphrase) != VALID_TOKEN:
+        return make_response(build_gate_page('Incorrect passphrase — try again.'), 401)
+    return make_response(build_gate_page('Please select a household.'), 401)
+
+
+@app.post('/api/add-household')
+def add_household():
+    data = request.get_json(force=True, silent=True) or {}
+    name = data.get('name', '').strip()
+    passphrase = data.get('passphrase', '')
+    if make_auth_token(passphrase) != VALID_TOKEN:
+        return jsonify(error='Invalid passphrase'), 401
+    if not name or len(name) > 40:
+        return jsonify(error='Household name required (max 40 characters)'), 400
+    with db_cursor() as cur:
+        cur.execute("SELECT MAX(sort_order) AS mx FROM households WHERE sort_order < 999")
+        row = cur.fetchone()
+        max_order = (row['mx'] or 0) if row else 0
+        cur.execute(
+            "INSERT INTO households (name, sort_order) VALUES (%s, %s) ON CONFLICT (name) DO NOTHING",
+            (name, max_order + 1)
+        )
+    return jsonify(success=True)
 
 
 @app.post('/api/logout')
 def logout():
     resp = make_response(redirect('/', 302))
     resp.delete_cookie(COOKIE_NAME, path='/', samesite='None', secure=True)
+    resp.delete_cookie('wfc_household', path='/', samesite='None', secure=True)
     return resp
 
 
@@ -1515,6 +1676,104 @@ def chat():
         import traceback
         app.logger.error(f'[chat] {type(e).__name__}: {e}\n{traceback.format_exc()}')
         return jsonify(error='Something went wrong — please try again.'), 500
+
+# ── Grocery APIs ──────────────────────────────────────────────────────────────
+
+def _parse_ingredients_from_html(row):
+    """Fallback: extract ingredients from card_html for legacy cards without recipe_json."""
+    html = row.get('card_html', '')
+    card_id = row.get('card_id', '')
+    category = row.get('category', '')
+    # Extract title
+    title_m = re.search(r'class="(?:front|back)-title"[^>]*>([^<]+)', html)
+    title = title_m.group(1).strip() if title_m else 'Recipe'
+    # Extract servings
+    serv_m = re.search(r'class="back-stat-val"[^>]*>([^<]+)', html)
+    servings = serv_m.group(1).strip() if serv_m else ''
+    # Extract ingredients
+    ingredients = []
+    for m in re.finditer(
+        r'class="b-ing-name"[^>]*>([^<]+)</span>\s*<span[^>]*class="b-ing-amt"[^>]*>([^<]+)',
+        html
+    ):
+        ingredients.append({'name': m.group(1).strip(), 'amount': m.group(2).strip()})
+    return {
+        'cardId': card_id,
+        'category': category,
+        'title': title,
+        'servings': servings,
+        'ingredients': ingredients,
+    }
+
+
+@app.get('/api/recipes-json')
+@require_auth
+def recipes_json():
+    """Return all recipes with structured ingredient data for the grocery system."""
+    try:
+        with db_cursor() as cur:
+            cur.execute('SELECT card_id, category, recipe_json, card_html FROM recipes ORDER BY created_at ASC')
+            rows = cur.fetchall()
+        results = []
+        for r in rows:
+            rj = None
+            if r.get('recipe_json'):
+                try:
+                    rj = json.loads(r['recipe_json'])
+                except (json.JSONDecodeError, TypeError):
+                    rj = None
+            if rj and rj.get('ingredients'):
+                results.append({
+                    'cardId': r['card_id'],
+                    'category': r['category'],
+                    'title': rj.get('title', 'Recipe'),
+                    'servings': rj.get('servings', ''),
+                    'ingredients': rj.get('ingredients', []),
+                })
+            else:
+                results.append(_parse_ingredients_from_html(r))
+        return jsonify(recipes=results)
+    except Exception as e:
+        app.logger.error(f'[recipes-json] {e}')
+        return jsonify(error=str(e)), 500
+
+
+@app.get('/api/grocery')
+@require_auth
+def get_grocery():
+    """Return the grocery state for the current household."""
+    try:
+        household = get_current_household()
+        with db_cursor() as cur:
+            cur.execute('SELECT state_json FROM grocery_state WHERE household = %s', (household,))
+            row = cur.fetchone()
+        state = json.loads(row['state_json']) if row else {}
+        return jsonify(state=state)
+    except Exception as e:
+        app.logger.error(f'[get-grocery] {e}')
+        return jsonify(error=str(e)), 500
+
+
+@app.post('/api/grocery')
+@require_auth
+def save_grocery():
+    """Save the grocery state for the current household."""
+    try:
+        household = get_current_household()
+        data = request.get_json(force=True, silent=True) or {}
+        state_json = json.dumps(data.get('state', {}))
+        with db_cursor() as cur:
+            cur.execute("""
+                INSERT INTO grocery_state (household, state_json, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (household) DO UPDATE
+                SET state_json = EXCLUDED.state_json, updated_at = NOW()
+            """, (household, state_json))
+        return jsonify(success=True)
+    except Exception as e:
+        app.logger.error(f'[save-grocery] {e}')
+        return jsonify(error=str(e)), 500
+
 
 # ── Startup ────────────────────────────────────────────────────────────────────
 

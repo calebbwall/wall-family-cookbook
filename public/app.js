@@ -159,6 +159,474 @@ function _scaleIngText(originalText, ratio) {
   return _formatNum(val * ratio) + m[2];
 }
 
+// ══════════════════════════════════════════════════════════════════
+// ── Grocery Shopping System ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+
+// ── Unit normalization ──────────────────────────────────────────
+const _UNIT_ALIASES = {
+  'tsp':'tsp','teaspoon':'tsp','teaspoons':'tsp',
+  'tbsp':'tbsp','tablespoon':'tbsp','tablespoons':'tbsp','tbs':'tbsp',
+  'cup':'cup','cups':'cup','c':'cup',
+  'oz':'oz','ounce':'oz','ounces':'oz',
+  'lb':'lb','lbs':'lb','pound':'lb','pounds':'lb',
+  'g':'g','gram':'g','grams':'g',
+  'kg':'kg','kilogram':'kg','kilograms':'kg',
+  'ml':'ml','milliliter':'ml','milliliters':'ml',
+  'l':'L','liter':'L','liters':'L','litre':'L','litres':'L',
+  'clove':'clove','cloves':'clove',
+  'can':'can','cans':'can',
+  'bunch':'bunch','bunches':'bunch',
+  'slice':'slice','slices':'slice',
+  'piece':'piece','pieces':'piece',
+  'pinch':'pinch','dash':'dash',
+  'sprig':'sprig','sprigs':'sprig',
+  'stick':'stick','sticks':'stick',
+  'head':'head','heads':'head',
+  'ear':'ear','ears':'ear',
+  'stalk':'stalk','stalks':'stalk',
+  'packet':'packet','packets':'packet',
+  'package':'package','packages':'package',
+  'box':'box','boxes':'box',
+  'bag':'bag','bags':'bag',
+  'bottle':'bottle','bottles':'bottle',
+  'jar':'jar','jars':'jar',
+};
+
+// Unit conversion (convertible families share a base unit)
+const _UNIT_CONV = {
+  'tsp':  { base:'tsp', factor:1 },
+  'tbsp': { base:'tsp', factor:3 },
+  'cup':  { base:'tsp', factor:48 },
+  'oz':   { base:'oz',  factor:1 },
+  'lb':   { base:'oz',  factor:16 },
+  'g':    { base:'g',   factor:1 },
+  'kg':   { base:'g',   factor:1000 },
+  'ml':   { base:'ml',  factor:1 },
+  'L':    { base:'ml',  factor:1000 },
+};
+
+// Discrete units: always ceil to whole numbers
+const _DISCRETE_UNITS = new Set([
+  'count','clove','can','bunch','slice','piece','sprig','stick',
+  'head','ear','stalk','packet','package','box','bag','bottle','jar',
+]);
+
+// ── Ingredient amount parser ────────────────────────────────────
+function _parseIngAmount(amountStr) {
+  if (!amountStr) return { qty: 0, unit: 'unknown', extra: '' };
+  let s = amountStr.trim();
+  // Extract leading number using existing _parseFrac
+  const numMatch = s.match(_LEAD_NUM_RE);
+  if (!numMatch) {
+    // No number found — "to taste", "a pinch", etc.
+    return { qty: 0, unit: 'unknown', extra: s };
+  }
+  const qty = _parseFrac(numMatch[1]);
+  let rest = numMatch[2].trim();
+  // Try to match a unit from the rest
+  // Handle parentheticals: "1 can (14 oz)" → unit=can, extra=(14 oz)
+  let extra = '';
+  const parenIdx = rest.indexOf('(');
+  if (parenIdx >= 0) {
+    extra = rest.slice(parenIdx).trim();
+    rest = rest.slice(0, parenIdx).trim();
+  }
+  // First word of rest is the candidate unit
+  const words = rest.split(/\s+/);
+  const candidate = (words[0] || '').toLowerCase().replace(/[.,;:]+$/, '');
+  const normUnit = _UNIT_ALIASES[candidate];
+  if (normUnit) {
+    return { qty: qty || 0, unit: normUnit, extra: (words.slice(1).join(' ') + ' ' + extra).trim() };
+  }
+  // No recognized unit — if rest is empty, it's a count
+  if (!rest && !extra) return { qty: qty || 0, unit: 'count', extra: '' };
+  // Rest might be descriptive text (e.g., "large" in "2 large")
+  return { qty: qty || 0, unit: 'count', extra: (rest + ' ' + extra).trim() };
+}
+
+// ── Ingredient name normalizer ──────────────────────────────────
+const _PREP_WORDS = new Set([
+  'fresh','dried','chopped','minced','diced','sliced','grated','shredded',
+  'large','small','medium','finely','roughly','thinly','coarsely',
+  'frozen','canned','packed','softened','melted','room temperature',
+  'boneless','skinless','trimmed','peeled','seeded','crushed','ground',
+  'whole','halved','quartered',
+]);
+
+function _normalizeIngName(name) {
+  let n = name.toLowerCase().trim();
+  // Remove commas and everything after (prep instructions)
+  const commaIdx = n.indexOf(',');
+  if (commaIdx > 0) n = n.slice(0, commaIdx).trim();
+  // Strip prep words
+  n = n.split(/\s+/).filter(w => !_PREP_WORDS.has(w)).join(' ');
+  // Basic depluralize
+  if (n.endsWith('ies') && n.length > 4) n = n.slice(0, -3) + 'y';
+  else if (n.endsWith('ves') && n.length > 4) n = n.slice(0, -3) + 'f';
+  else if (n.endsWith('oes') && n.length > 4) n = n.slice(0, -2);
+  else if (n.endsWith('es') && n.length > 3 && !n.endsWith('cheese') && !n.endsWith('rice') && !n.endsWith('sauce')) n = n.slice(0, -2);
+  else if (n.endsWith('s') && n.length > 2 && !n.endsWith('hummus') && !n.endsWith('couscous') && !n.endsWith('molasses')) n = n.slice(0, -1);
+  return n.trim();
+}
+
+// ── Ingredient category classification ──────────────────────────
+const _ING_CATEGORIES = {
+  produce: ['onion','garlic','tomato','potato','carrot','celery','pepper','bell pepper',
+    'lettuce','spinach','broccoli','mushroom','lemon','lime','avocado','cilantro',
+    'parsley','basil','ginger','jalape','scallion','shallot','zucchini','squash',
+    'corn','green bean','pea','apple','banana','berry','strawberr','blueberr',
+    'raspberr','orange','cucumber','cabbage','kale','arugula','fennel','leek',
+    'asparagus','eggplant','radish','beet','turnip','sweet potato','mango','peach',
+    'pear','plum','grape','pineapple','watermelon','cantaloupe','cherry','fig',
+    'pomegranate','cranberr','herb'],
+  dairy: ['milk','butter','cheese','cream','yogurt','egg','sour cream','whipping cream',
+    'half and half','mozzarella','parmesan','cheddar','ricotta','cream cheese',
+    'goat cheese','feta','gruyere','provolone','swiss','cottage cheese','ghee',
+    'mascarpone','brie'],
+  meat: ['chicken','beef','pork','turkey','bacon','sausage','ground meat','steak',
+    'lamb','shrimp','salmon','fish','tuna','ham','prosciutto','pepperoni',
+    'anchov','crab','lobster','scallop','clam','mussel','oyster','duck',
+    'veal','bison','venison','chorizo','bratwurst'],
+  bakery: ['bread','tortilla','bun','roll','pita','naan','croissant','bagel',
+    'english muffin','crouton','flatbread','wrap','pizza dough','pie crust',
+    'puff pastry','phyllo'],
+  pantry: ['flour','sugar','salt','oil','olive oil','vegetable oil','coconut oil',
+    'vinegar','soy sauce','broth','stock','paste','tomato sauce','honey',
+    'maple syrup','vanilla','baking powder','baking soda','cornstarch',
+    'rice','pasta','noodle','oat','breadcrumb','panko','coconut milk',
+    'peanut butter','almond butter','jam','jelly','ketchup','mustard',
+    'mayonnaise','hot sauce','worcestershire','sesame oil','fish sauce',
+    'sriracha','chocolate','cocoa','condensed milk','evaporated milk',
+    'corn syrup','molasses','agave','brown sugar','powdered sugar',
+    'yeast','gelatin','nut','almond','walnut','pecan','cashew','pistachio',
+    'pine nut','sesame seed','sunflower seed','flaxseed','chia seed',
+    'raisin','dried cranberr','date','coconut flake'],
+  spices: ['cumin','paprika','oregano','thyme','rosemary','cinnamon','nutmeg',
+    'cayenne','chili powder','turmeric','coriander','black pepper','red pepper',
+    'bay leaf','allspice','cardamom','clove','fennel seed','dill',
+    'sage','tarragon','marjoram','curry','garam masala','five spice',
+    'smoked paprika','garlic powder','onion powder','italian seasoning',
+    'everything bagel','old bay','taco seasoning','ranch seasoning',
+    'chili flake','red pepper flake','white pepper','star anise','saffron',
+    'sumac','za\'atar'],
+  frozen: ['frozen'],
+  other: [],
+};
+
+function _categorizeIngredient(name) {
+  const n = name.toLowerCase();
+  for (const [cat, keywords] of Object.entries(_ING_CATEGORIES)) {
+    if (cat === 'other') continue;
+    for (const kw of keywords) {
+      if (n.includes(kw)) return cat;
+    }
+  }
+  return 'other';
+}
+
+const _CAT_META = {
+  produce: { icon: '🥬', label: 'Produce', order: 0 },
+  dairy:   { icon: '🥛', label: 'Dairy & Eggs', order: 1 },
+  meat:    { icon: '🥩', label: 'Meat & Seafood', order: 2 },
+  bakery:  { icon: '🍞', label: 'Bakery', order: 3 },
+  pantry:  { icon: '🫙', label: 'Pantry', order: 4 },
+  spices:  { icon: '🧂', label: 'Spices & Seasonings', order: 5 },
+  frozen:  { icon: '🧊', label: 'Frozen', order: 6 },
+  other:   { icon: '📦', label: 'Other', order: 7 },
+};
+
+// ── Unit conversion helpers ─────────────────────────────────────
+function _toBaseUnit(qty, unit) {
+  const conv = _UNIT_CONV[unit];
+  if (!conv) return { qty, baseUnit: unit };
+  return { qty: qty * conv.factor, baseUnit: conv.base };
+}
+
+function _fromBaseUnit(qty, baseUnit) {
+  // Pick the largest unit where qty >= 1
+  const family = Object.entries(_UNIT_CONV).filter(([, v]) => v.base === baseUnit);
+  family.sort((a, b) => b[1].factor - a[1].factor); // largest first
+  for (const [unitName, { factor }] of family) {
+    if (qty >= factor) {
+      return { qty: qty / factor, unit: unitName };
+    }
+  }
+  // Fallback to base
+  return { qty, unit: baseUnit };
+}
+
+// ── Aggregation engine ──────────────────────────────────────────
+// _allRecipesCache is populated once from /api/recipes-json
+let _allRecipesCache = null;
+
+async function _fetchAllRecipes() {
+  if (_allRecipesCache) return _allRecipesCache;
+  try {
+    const res = await fetch('/api/recipes-json');
+    const data = await res.json();
+    _allRecipesCache = data.recipes || [];
+  } catch (e) {
+    console.error('[grocery] Failed to fetch recipes:', e);
+    _allRecipesCache = [];
+  }
+  return _allRecipesCache;
+}
+
+function _invalidateRecipeCache() { _allRecipesCache = null; }
+
+function _parseServingsNum(servingsStr) {
+  const m = String(servingsStr || '').match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+function _computeGroceryList(state, allRecipes) {
+  // Map cardId → recipe data
+  const recipeMap = {};
+  for (const r of allRecipes) recipeMap[r.cardId] = r;
+
+  // Accumulator: key = normalizedName + '|' + baseUnit → { qty, originalName, sources, category }
+  const merged = {};
+
+  for (const sr of (state.recipes || [])) {
+    const recipe = recipeMap[sr.cardId];
+    if (!recipe) continue;
+    const baseServ = sr.baseServings || _parseServingsNum(recipe.servings) || 1;
+    const curServ = sr.servings || baseServ;
+    const ratio = curServ / baseServ;
+
+    for (const ing of (recipe.ingredients || [])) {
+      const parsed = _parseIngAmount(ing.amount || '');
+      if (parsed.unit === 'unknown' && parsed.qty === 0) continue; // skip "to taste" etc.
+      const normName = _normalizeIngName(ing.name || '');
+      if (!normName) continue;
+      const scaledQty = parsed.qty * ratio;
+      const { qty: baseQty, baseUnit } = _toBaseUnit(scaledQty, parsed.unit);
+      const key = normName + '|' + baseUnit;
+
+      if (!merged[key]) {
+        merged[key] = {
+          normName,
+          originalName: ing.name || normName,
+          baseUnit,
+          baseQty: 0,
+          sources: [],
+          category: _categorizeIngredient(ing.name || normName),
+        };
+      }
+      merged[key].baseQty += baseQty;
+      if (!merged[key].sources.includes(sr.title || recipe.title)) {
+        merged[key].sources.push(sr.title || recipe.title);
+      }
+    }
+  }
+
+  // Convert back from base units, apply rounding, subtract pantry, apply locks
+  const items = [];
+  for (const [key, item] of Object.entries(merged)) {
+    // Check if locked
+    if (state.locked && state.locked[key]) {
+      const lock = state.locked[key];
+      items.push({
+        key,
+        name: item.originalName,
+        normName: item.normName,
+        quantity: lock.quantity,
+        unit: lock.unit,
+        category: item.category,
+        sources: item.sources,
+        locked: true,
+        pantryReduced: false,
+      });
+      continue;
+    }
+
+    let { qty, unit } = _fromBaseUnit(item.baseQty, item.baseUnit);
+
+    // Pantry subtraction
+    let pantryReduced = false;
+    if (state.pantry && state.pantry[item.normName]) {
+      const p = state.pantry[item.normName];
+      const { qty: pBaseQty } = _toBaseUnit(p.quantity || 0, p.unit || unit);
+      const { qty: curBaseQty } = _toBaseUnit(qty, unit);
+      if (pBaseQty > 0) {
+        const remaining = Math.max(0, curBaseQty - pBaseQty);
+        const result = _fromBaseUnit(remaining, item.baseUnit);
+        qty = result.qty;
+        unit = result.unit;
+        pantryReduced = true;
+      }
+    }
+
+    // Rounding
+    if (_DISCRETE_UNITS.has(unit)) {
+      qty = Math.ceil(qty);
+    }
+
+    if (qty <= 0) continue;
+
+    items.push({
+      key,
+      name: item.originalName,
+      normName: item.normName,
+      quantity: qty,
+      unit,
+      category: item.category,
+      sources: item.sources,
+      locked: false,
+      pantryReduced,
+    });
+  }
+
+  // Add manual items
+  for (const mi of (state.manualItems || [])) {
+    items.push({
+      key: 'manual-' + mi.id,
+      name: mi.name,
+      normName: _normalizeIngName(mi.name),
+      quantity: mi.quantity || 1,
+      unit: mi.unit || 'count',
+      category: mi.category || 'other',
+      sources: ['Manual'],
+      locked: false,
+      pantryReduced: false,
+      isManual: true,
+    });
+  }
+
+  // Group by category
+  const grouped = {};
+  for (const it of items) {
+    if (!grouped[it.category]) grouped[it.category] = [];
+    grouped[it.category].push(it);
+  }
+
+  // Sort categories by defined order, items alphabetically within
+  const sortedCats = Object.keys(grouped).sort(
+    (a, b) => ((_CAT_META[a]?.order ?? 99) - (_CAT_META[b]?.order ?? 99))
+  );
+  const result = {};
+  for (const cat of sortedCats) {
+    result[cat] = grouped[cat].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return result;
+}
+
+// ── Grocery state management ────────────────────────────────────
+let _groceryState = { recipes: [], manualItems: [], pantry: {}, checked: [], locked: {} };
+let _groceryDirty = true;
+let _groceryComputed = {};
+let _grocerySaveTimer = null;
+
+async function _loadGroceryState() {
+  try {
+    const res = await fetch('/api/grocery');
+    const data = await res.json();
+    if (data.state && typeof data.state === 'object') {
+      _groceryState = {
+        recipes: data.state.recipes || [],
+        manualItems: data.state.manualItems || [],
+        pantry: data.state.pantry || {},
+        checked: data.state.checked || [],
+        locked: data.state.locked || {},
+      };
+    }
+  } catch (e) {
+    console.error('[grocery] Failed to load state:', e);
+  }
+  _groceryDirty = true;
+}
+
+function _saveGroceryState() {
+  // Debounce saves
+  clearTimeout(_grocerySaveTimer);
+  _grocerySaveTimer = setTimeout(async () => {
+    try {
+      await fetch('/api/grocery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: _groceryState }),
+      });
+    } catch (e) {
+      console.error('[grocery] Failed to save state:', e);
+    }
+  }, 500);
+}
+
+function _formatGroceryQty(qty, unit) {
+  if (_DISCRETE_UNITS.has(unit) || unit === 'count') {
+    return String(Math.ceil(qty));
+  }
+  return _formatNum(qty);
+}
+
+function _formatGroceryUnit(unit) {
+  if (unit === 'count') return '';
+  return unit;
+}
+
+// ── Grocery public API (called from UI) ─────────────────────────
+
+async function addRecipeToGrocery(cardId) {
+  const allRecipes = await _fetchAllRecipes();
+  const recipe = allRecipes.find(r => r.cardId === cardId);
+  if (!recipe) { _showToast('Recipe not found'); return; }
+  // Check if already added
+  if (_groceryState.recipes.some(r => r.cardId === cardId)) {
+    _showToast('Already in grocery list');
+    return;
+  }
+  const baseServ = _parseServingsNum(recipe.servings) || 1;
+  _groceryState.recipes.push({
+    cardId,
+    title: recipe.title,
+    servings: baseServ,
+    baseServings: baseServ,
+  });
+  _groceryDirty = true;
+  _saveGroceryState();
+  _showToast('Added to groceries!');
+  _updateGroceryBadge();
+  if (document.getElementById('grocery-tab')?.style.display !== 'none') {
+    await _renderGroceryTab();
+  }
+}
+
+function removeRecipeFromGrocery(cardId) {
+  _groceryState.recipes = _groceryState.recipes.filter(r => r.cardId !== cardId);
+  _groceryDirty = true;
+  _saveGroceryState();
+  _updateGroceryBadge();
+  _renderGroceryTab();
+}
+
+function _updateGroceryBadge() {
+  const count = _groceryState.recipes.length;
+  for (const id of ['grocery-badge', 'grocery-badge-mobile']) {
+    const badge = document.getElementById(id);
+    if (!badge) continue;
+    badge.textContent = String(count);
+    badge.style.display = count > 0 ? 'inline-block' : 'none';
+  }
+}
+
+// Toast notification system
+function _showToast(message, duration = 2500) {
+  const el = document.createElement('div');
+  el.className = 'wfc-toast';
+  el.textContent = message;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('wfc-toast-show'));
+  setTimeout(() => {
+    el.classList.remove('wfc-toast-show');
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── End Grocery System Core ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+
 // ── Servings scaler UI ────────────────────────────────────────────
 function _buildServingsScaler(baseServings) {
   _cookBaseServings = baseServings;
@@ -1419,12 +1887,369 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
+// ══════════════════════════════════════════════════════════════════
+// ── Grocery Tab UI Rendering ────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+
+let _groceryTabVisible = false;
+
+function toggleGroceryTab() {
+  _groceryTabVisible = !_groceryTabVisible;
+  const tab = document.getElementById('grocery-tab');
+  const sections = document.querySelectorAll('.section, .section-divider, .hero, footer');
+  if (_groceryTabVisible) {
+    tab.style.display = 'block';
+    sections.forEach(s => s.style.display = 'none');
+    _renderGroceryTab();
+  } else {
+    tab.style.display = 'none';
+    sections.forEach(s => s.style.display = '');
+  }
+}
+
+let _groceryRenderTimer = null;
+async function _renderGroceryTab() {
+  clearTimeout(_groceryRenderTimer);
+  _groceryRenderTimer = setTimeout(async () => { await _doRenderGroceryTab(); }, 80);
+}
+
+async function _doRenderGroceryTab() {
+  const allRecipes = await _fetchAllRecipes();
+  const computed = _computeGroceryList(_groceryState, allRecipes);
+  _groceryComputed = computed;
+
+  // Render active recipes strip
+  const recipesEl = document.getElementById('grocery-recipes');
+  recipesEl.innerHTML = '';
+  for (const sr of (_groceryState.recipes || [])) {
+    const chip = document.createElement('div');
+    chip.className = 'grocery-recipe-chip';
+    chip.innerHTML = `
+      <span>${_escHtml(sr.title)}</span>
+      <span class="grocery-recipe-chip-servings">
+        <button onclick="event.stopPropagation();changeGroceryServings('${sr.cardId}',-1)">−</button>
+        <span>${sr.servings}</span>
+        <button onclick="event.stopPropagation();changeGroceryServings('${sr.cardId}',1)">+</button>
+      </span>
+      <button class="grocery-recipe-chip-remove" onclick="removeRecipeFromGrocery('${sr.cardId}')" title="Remove">&times;</button>
+    `;
+    recipesEl.appendChild(chip);
+  }
+
+  // Render grocery list
+  const listEl = document.getElementById('grocery-list');
+  const emptyEl = document.getElementById('grocery-empty');
+  const hasItems = Object.keys(computed).length > 0;
+
+  if (!hasItems) {
+    listEl.innerHTML = '';
+    listEl.appendChild(emptyEl);
+    emptyEl.style.display = '';
+  } else {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'none';
+
+    for (const [cat, items] of Object.entries(computed)) {
+      const meta = _CAT_META[cat] || _CAT_META.other;
+      const section = document.createElement('details');
+      section.className = 'grocery-category';
+      section.open = true;
+      section.innerHTML = `
+        <summary>
+          <span class="grocery-cat-icon">${meta.icon}</span>
+          <span>${meta.label}</span>
+          <span class="grocery-cat-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
+        </summary>
+      `;
+      const itemsDiv = document.createElement('div');
+      itemsDiv.className = 'grocery-items';
+
+      for (const item of items) {
+        const isChecked = (_groceryState.checked || []).includes(item.key);
+        const row = document.createElement('div');
+        row.className = 'grocery-item' + (isChecked ? ' grocery-item-checked' : '') +
+          (item.locked ? ' grocery-item-locked' : '') +
+          (item.pantryReduced ? ' grocery-item-pantry' : '');
+        row.dataset.key = item.key;
+
+        const fmtQty = _formatGroceryQty(item.quantity, item.unit);
+        const fmtUnit = _formatGroceryUnit(item.unit);
+        const sourceTip = item.sources.join(', ');
+        const sourceLabel = item.sources.length > 1 ? `${item.sources.length} recipes` :
+          (item.isManual ? 'Manual' : item.sources[0] || '');
+
+        row.innerHTML = `
+          <input type="checkbox" class="grocery-check" ${isChecked ? 'checked' : ''}
+            onchange="toggleGroceryCheck('${_escAttr(item.key)}', this.checked)">
+          <span class="grocery-item-qty">${fmtQty}</span>
+          <span class="grocery-item-unit">${fmtUnit}</span>
+          <span class="grocery-item-name">${_escHtml(item.name)}${item.locked ? ' 🔒' : ''}${item.pantryReduced ? ' 🏠' : ''}</span>
+          <span class="grocery-item-sources" title="${_escAttr(sourceTip)}">${_escHtml(sourceLabel)}</span>
+          <div class="grocery-item-actions">
+            <button class="grocery-item-action-btn" onclick="addToPantry('${_escAttr(item.normName)}',${item.quantity},'${_escAttr(item.unit)}')" title="I have this">🏠</button>
+            ${item.isManual ? `<button class="grocery-item-action-btn" onclick="removeManualItem('${_escAttr(item.key)}')" title="Remove">🗑</button>` : ''}
+          </div>
+        `;
+        itemsDiv.appendChild(row);
+      }
+      section.appendChild(itemsDiv);
+      listEl.appendChild(section);
+    }
+  }
+
+  // Render pantry section
+  _renderPantry();
+}
+
+function _renderPantry() {
+  const pantry = _groceryState.pantry || {};
+  const pantryKeys = Object.keys(pantry);
+  const section = document.getElementById('grocery-pantry-section');
+  const listEl = document.getElementById('grocery-pantry');
+
+  if (pantryKeys.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  listEl.innerHTML = '';
+  for (const [name, data] of Object.entries(pantry)) {
+    const div = document.createElement('div');
+    div.className = 'grocery-pantry-item';
+    const fmtUnit = data.unit === 'count' ? '' : data.unit;
+    div.innerHTML = `
+      <span>${_escHtml(name)}</span>
+      <span style="margin-left:auto;color:var(--muted)">${_formatGroceryQty(data.quantity, data.unit)} ${fmtUnit}</span>
+      <button class="grocery-item-action-btn" onclick="removePantryItem('${_escAttr(name)}')" title="Remove from pantry">×</button>
+    `;
+    listEl.appendChild(div);
+  }
+}
+
+function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _escAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+// ── Grocery UI event handlers ───────────────────────────────────
+
+function toggleGroceryCheck(key, checked) {
+  const arr = _groceryState.checked || [];
+  if (checked && !arr.includes(key)) arr.push(key);
+  else if (!checked) _groceryState.checked = arr.filter(k => k !== key);
+  else _groceryState.checked = arr;
+  _saveGroceryState();
+  // Update visual immediately
+  const row = document.querySelector(`.grocery-item[data-key="${CSS.escape(key)}"]`);
+  if (row) row.classList.toggle('grocery-item-checked', checked);
+}
+
+function changeGroceryServings(cardId, delta) {
+  const sr = _groceryState.recipes.find(r => r.cardId === cardId);
+  if (!sr) return;
+  sr.servings = Math.max(1, (sr.servings || 1) + delta);
+  _groceryDirty = true;
+  _saveGroceryState();
+  _renderGroceryTab();
+}
+
+// ── Recipe picker ───────────────────────────────────────────────
+async function openRecipePicker() {
+  const allRecipes = await _fetchAllRecipes();
+  const body = document.getElementById('recipe-picker-body');
+  body.innerHTML = '';
+  const existing = new Set((_groceryState.recipes || []).map(r => r.cardId));
+
+  for (const r of allRecipes) {
+    const baseServ = _parseServingsNum(r.servings) || 1;
+    const div = document.createElement('div');
+    div.className = 'recipe-picker-item';
+    div.innerHTML = `
+      <input type="checkbox" class="recipe-picker-check" data-card-id="${r.cardId}" ${existing.has(r.cardId) ? 'checked disabled' : ''}>
+      <span class="recipe-picker-title">${_escHtml(r.title)}</span>
+      <span class="recipe-picker-servings">
+        <span>Servings:</span>
+        <input type="number" class="recipe-picker-serv-input" data-card-id="${r.cardId}" value="${baseServ}" min="1" max="50">
+      </span>
+    `;
+    body.appendChild(div);
+  }
+  document.getElementById('recipe-picker-modal').style.display = 'flex';
+}
+
+function closeRecipePicker() {
+  document.getElementById('recipe-picker-modal').style.display = 'none';
+}
+
+async function applyRecipePicker() {
+  const allRecipes = await _fetchAllRecipes();
+  const checks = document.querySelectorAll('.recipe-picker-check:checked:not(:disabled)');
+  let added = 0;
+  checks.forEach(cb => {
+    const cardId = cb.dataset.cardId;
+    const recipe = allRecipes.find(r => r.cardId === cardId);
+    if (!recipe) return;
+    if (_groceryState.recipes.some(r => r.cardId === cardId)) return;
+    const servInput = document.querySelector(`.recipe-picker-serv-input[data-card-id="${cardId}"]`);
+    const servings = parseInt(servInput?.value, 10) || _parseServingsNum(recipe.servings) || 1;
+    const baseServ = _parseServingsNum(recipe.servings) || 1;
+    _groceryState.recipes.push({ cardId, title: recipe.title, servings, baseServings: baseServ });
+    added++;
+  });
+  if (added > 0) {
+    _groceryDirty = true;
+    _saveGroceryState();
+    _updateGroceryBadge();
+    _showToast(`Added ${added} recipe${added > 1 ? 's' : ''}!`);
+    _renderGroceryTab();
+  }
+  closeRecipePicker();
+}
+
+// ── Manual item ─────────────────────────────────────────────────
+function openManualItemForm() {
+  document.getElementById('manual-item-name').value = '';
+  document.getElementById('manual-item-qty').value = '1';
+  document.getElementById('manual-item-cat').value = 'pantry';
+  document.getElementById('manual-item-modal').style.display = 'flex';
+}
+function closeManualItemForm() {
+  document.getElementById('manual-item-modal').style.display = 'none';
+}
+
+function addManualItem() {
+  const name = document.getElementById('manual-item-name').value.trim();
+  const qty = parseFloat(document.getElementById('manual-item-qty').value) || 1;
+  const cat = document.getElementById('manual-item-cat').value;
+  if (!name) { _showToast('Please enter an item name'); return; }
+  if (!_groceryState.manualItems) _groceryState.manualItems = [];
+  _groceryState.manualItems.push({
+    id: 'm-' + Date.now(),
+    name,
+    quantity: qty,
+    unit: 'count',
+    category: cat,
+  });
+  _groceryDirty = true;
+  _saveGroceryState();
+  closeManualItemForm();
+  _showToast('Item added!');
+  _renderGroceryTab();
+}
+
+function removeManualItem(key) {
+  const id = key.replace('manual-', '');
+  _groceryState.manualItems = (_groceryState.manualItems || []).filter(m => m.id !== id);
+  _groceryDirty = true;
+  _saveGroceryState();
+  _renderGroceryTab();
+}
+
+// ── Pantry ──────────────────────────────────────────────────────
+function addToPantry(normName, qty, unit) {
+  if (!_groceryState.pantry) _groceryState.pantry = {};
+  _groceryState.pantry[normName] = { quantity: qty, unit };
+  _groceryDirty = true;
+  _saveGroceryState();
+  _showToast('Added to pantry');
+  _renderGroceryTab();
+}
+
+function removePantryItem(name) {
+  if (_groceryState.pantry) delete _groceryState.pantry[name];
+  _groceryDirty = true;
+  _saveGroceryState();
+  _renderGroceryTab();
+}
+
+function clearPantry() {
+  _groceryState.pantry = {};
+  _groceryDirty = true;
+  _saveGroceryState();
+  _renderGroceryTab();
+  _showToast('Pantry cleared');
+}
+
+// ── Export ───────────────────────────────────────────────────────
+function exportGroceryList() {
+  const computed = _groceryComputed;
+  if (!computed || Object.keys(computed).length === 0) {
+    _showToast('Nothing to copy'); return;
+  }
+  let text = '🛒 Grocery List\n\n';
+  for (const [cat, items] of Object.entries(computed)) {
+    const meta = _CAT_META[cat] || _CAT_META.other;
+    text += `${meta.icon} ${meta.label.toUpperCase()}\n`;
+    items.forEach(i => {
+      const fmtUnit = _formatGroceryUnit(i.unit);
+      const checked = (_groceryState.checked || []).includes(i.key);
+      text += `  ${checked ? '☑' : '☐'} ${_formatGroceryQty(i.quantity, i.unit)} ${fmtUnit} ${i.name}\n`;
+    });
+    text += '\n';
+  }
+  navigator.clipboard.writeText(text.trim()).then(() => {
+    _showToast('Grocery list copied!');
+  }).catch(() => {
+    _showToast('Copy failed — try again');
+  });
+}
+
+function clearGroceryList() {
+  if (!confirm('Clear the entire grocery list?')) return;
+  _groceryState.recipes = [];
+  _groceryState.manualItems = [];
+  _groceryState.checked = [];
+  _groceryState.locked = {};
+  // Keep pantry
+  _groceryDirty = true;
+  _saveGroceryState();
+  _updateGroceryBadge();
+  _renderGroceryTab();
+  _showToast('Grocery list cleared');
+}
+
+// ── Add to Groceries button injection on recipe cards ───────────
+function _injectGroceryButtons() {
+  document.querySelectorAll('.flip-card').forEach(card => {
+    const header = card.querySelector('.back-header');
+    if (!header || header.querySelector('.add-grocery-btn')) return;
+    const cardId = card.id;
+    const actions = header.querySelector('.back-header-actions');
+    if (!actions) return;
+    const btn = document.createElement('button');
+    btn.className = 'add-grocery-btn';
+    btn.textContent = '🛒 Add to Groceries';
+    btn.onclick = e => { e.stopPropagation(); addRecipeToGrocery(cardId); };
+    actions.insertBefore(btn, actions.firstChild);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── End Grocery Tab UI ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+
+// ── Household helpers ──────────────────────────────────────────────
+function _getHousehold() {
+  const m = document.cookie.match(/(?:^|;\s*)wfc_household=([^;]*)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 // ── Page-load init ────────────────────────────────────────────────
 
-// Pre-fill author name from the last successful submission
+// Display current household in footer
 (function () {
-  const saved = localStorage.getItem('wfc_author');
-  if (saved) document.getElementById('recipe-author').value = saved;
+  const hh = _getHousehold();
+  const label = document.getElementById('household-label');
+  if (label && hh) label.textContent = 'Logged in as: ' + hh;
+})();
+
+// Pre-fill author name from household cookie, then localStorage fallback
+(function () {
+  const hh = _getHousehold();
+  const saved = hh || localStorage.getItem('wfc_author');
+  if (saved) {
+    // Try both possible IDs (public template uses add-author, root uses recipe-author)
+    const el = document.getElementById('add-author') || document.getElementById('recipe-author');
+    if (el) el.value = saved;
+  }
 })();
 
 // Keyboard accessibility — let keyboard users flip cards with Enter/Space
@@ -1488,4 +2313,11 @@ document.querySelectorAll('.b-ing-row').forEach(row => {
     const dx = e.changedTouches[0].clientX - _swipeStartX;
     if (Math.abs(dx) > 50) stepZoomNav(dx < 0 ? 1 : -1);
   }, { passive: true });
+})();
+
+// ── Grocery system init ─────────────────────────────────────────
+(async function _initGrocery() {
+  await _loadGroceryState();
+  _updateGroceryBadge();
+  _injectGroceryButtons();
 })();

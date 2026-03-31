@@ -1145,6 +1145,7 @@
     <li><a href="#snacks">Snacks</a></li>
     <li><a href="#breakfast">Breakfast</a></li>
     <li><a href="#desserts">Desserts</a></li>
+    <li><a href="#" onclick="event.preventDefault();toggleGroceryTab()" id="nav-grocery-link" class="nav-grocery-link">🛒 Groceries <span class="grocery-badge" id="grocery-badge" style="display:none">0</span></a></li>
   </ul>
   <input class="nav-search" id="recipe-search" type="search"
     placeholder="Search recipes…" aria-label="Search recipes" autocomplete="off">
@@ -1159,6 +1160,7 @@
   <a href="#snacks">🍿 Snacks</a>
   <a href="#breakfast">🍳 Breakfast</a>
   <a href="#desserts">🍪 Desserts</a>
+  <a href="#" onclick="event.preventDefault();toggleGroceryTab()" class="mobile-grocery-link">🛒 Groceries <span class="grocery-badge-mobile" id="grocery-badge-mobile" style="display:none">0</span></a>
 </nav>
 
 <!-- Hero -->
@@ -1288,10 +1290,101 @@
 
 <!-- Footer -->
 <footer>
+  <span id="household-label" style="display:inline-block;margin-bottom:0.5rem;font-size:0.82rem;color:var(--tan-dark);font-style:italic;"></span><br>
   <strong>Wall Family Cookbook</strong>
   Recipes passed down, cooked with love, and always improving.<br>
   Hit <strong style="font-family:Lato,sans-serif;font-size:0.82rem;color:var(--tan-dark);display:inline">+ Add Recipe</strong> to share yours.
+  <br><br>
+  <a href="/api/export" download="recipes.json" style="color:var(--muted);font-size:0.75rem;text-decoration:none;opacity:0.6;">Export recipes</a>
+  &nbsp;&middot;&nbsp;
+  <a href="/api/logout" style="color:var(--muted);font-size:0.75rem;text-decoration:none;opacity:0.6;">Sign out</a>
 </footer>
+
+<!-- ═══════════════════════════════════════════════════════
+     GROCERY TAB — shown/hidden via toggleGroceryTab()
+     ═══════════════════════════════════════════════════════ -->
+<div id="grocery-tab" class="grocery-tab" style="display:none">
+  <div class="grocery-header">
+    <div class="grocery-header-top">
+      <h2 class="grocery-title">🛒 Grocery List</h2>
+      <button class="grocery-close-btn" onclick="toggleGroceryTab()" title="Back to recipes">&times;</button>
+    </div>
+    <div class="grocery-header-actions">
+      <button class="grocery-btn" onclick="openRecipePicker()">+ Add Recipes</button>
+      <button class="grocery-btn" onclick="openManualItemForm()">+ Custom Item</button>
+      <button class="grocery-btn" onclick="exportGroceryList()">📋 Copy List</button>
+      <button class="grocery-btn grocery-btn-danger" onclick="clearGroceryList()">Clear All</button>
+    </div>
+  </div>
+
+  <!-- Active recipes strip -->
+  <div class="grocery-recipes" id="grocery-recipes"></div>
+
+  <!-- Main grocery list -->
+  <div class="grocery-list" id="grocery-list">
+    <div class="grocery-empty" id="grocery-empty">
+      <div class="grocery-empty-icon">🛒</div>
+      <p class="grocery-empty-title">No items yet</p>
+      <p class="grocery-empty-sub">Add recipes to start building your grocery list.</p>
+      <button class="grocery-btn" onclick="openRecipePicker()" style="margin-top:1rem">+ Add Recipes</button>
+    </div>
+  </div>
+
+  <!-- Pantry section -->
+  <details class="grocery-pantry-section" id="grocery-pantry-section" style="display:none">
+    <summary class="grocery-pantry-summary">🏠 Pantry — items you already have</summary>
+    <div id="grocery-pantry" class="grocery-pantry-list"></div>
+    <div class="grocery-pantry-actions">
+      <button class="grocery-btn grocery-btn-sm" onclick="clearPantry()">Clear Pantry</button>
+    </div>
+  </details>
+</div>
+
+<!-- Recipe Picker Modal -->
+<div id="recipe-picker-modal" class="grocery-modal" style="display:none" onclick="if(event.target===this)closeRecipePicker()">
+  <div class="grocery-modal-card">
+    <div class="grocery-modal-header">
+      <h3>Select Recipes</h3>
+      <button class="grocery-close-btn" onclick="closeRecipePicker()">&times;</button>
+    </div>
+    <div class="grocery-modal-body" id="recipe-picker-body"></div>
+    <div class="grocery-modal-footer">
+      <button class="grocery-btn" onclick="applyRecipePicker()">Add Selected</button>
+      <button class="grocery-btn grocery-btn-outline" onclick="closeRecipePicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Item Modal -->
+<div id="manual-item-modal" class="grocery-modal" style="display:none" onclick="if(event.target===this)closeManualItemForm()">
+  <div class="grocery-modal-card" style="max-width:400px">
+    <div class="grocery-modal-header">
+      <h3>Add Custom Item</h3>
+      <button class="grocery-close-btn" onclick="closeManualItemForm()">&times;</button>
+    </div>
+    <div class="grocery-modal-body">
+      <label class="grocery-form-label">Item Name</label>
+      <input type="text" id="manual-item-name" class="grocery-form-input" placeholder="e.g. Paper towels" maxlength="60"/>
+      <label class="grocery-form-label">Quantity</label>
+      <input type="text" id="manual-item-qty" class="grocery-form-input" placeholder="e.g. 2" value="1"/>
+      <label class="grocery-form-label">Category</label>
+      <select id="manual-item-cat" class="grocery-form-input">
+        <option value="produce">Produce</option>
+        <option value="dairy">Dairy & Eggs</option>
+        <option value="meat">Meat & Seafood</option>
+        <option value="bakery">Bakery</option>
+        <option value="pantry" selected>Pantry</option>
+        <option value="spices">Spices & Seasonings</option>
+        <option value="frozen">Frozen</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="grocery-modal-footer">
+      <button class="grocery-btn" onclick="addManualItem()">Add Item</button>
+      <button class="grocery-btn grocery-btn-outline" onclick="closeManualItemForm()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- Edit Recipe Modal -->
 <div id="edit-recipe-modal" onclick="if(event.target===this)closeEditModal()">
