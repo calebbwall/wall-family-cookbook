@@ -1,0 +1,19 @@
+/* ═══════════════════════════════════════════════════════════════
+   Wall Family Cookbook — Design Tokens
+   These must match the legacy style.css exactly.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --red:        #8B1A1A;
+  --red-light:  #A52828;
+  --red-faint:  #FDF0F0;
+  --cream:      #FAF6F0;
+  --tan:        #E8DDD0;
+  --tan-dark:   #C9B99A;
+  --brown:      #5C3A1E;
+  --dark:       #2A1A0E;
+  --text:       #3A2010;
+  --muted:      #8A7060;
+  --white:      #FFFFFF;
+  --green:      #2a7d2a;
+}

@@ -1,0 +1,238 @@
+import { useState, useEffect, useCallback } from 'react'
+import { useRecipes } from '../hooks/useRecipes'
+import * as api from '../api'
+import { showToast } from '../utils'
+
+export default function EditRecipeModal({ cardId, onClose }) {
+  const { editRecipe, deleteRecipe, reload } = useRecipes()
+  const [tab, setTab] = useState('ai') // ai | direct | delete
+  const [loading, setLoading] = useState(true)
+  const [cardHtml, setCardHtml] = useState('')
+  const [recipeJson, setRecipeJson] = useState(null)
+  const [title, setTitle] = useState('')
+
+  // AI edit
+  const [aiInstructions, setAiInstructions] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiStatus, setAiStatus] = useState('')
+
+  // Direct edit
+  const [directFields, setDirectFields] = useState(null)
+
+  // Delete
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await api.getCardHtml(cardId)
+        setCardHtml(data.card_html || '')
+        if (data.recipe_json) {
+          const rj = typeof data.recipe_json === 'string' ? JSON.parse(data.recipe_json) : data.recipe_json
+          setRecipeJson(rj)
+          setTitle(rj.title || 'Recipe')
+          setDirectFields({ ...rj })
+        } else {
+          setTitle('Recipe')
+        }
+      } catch (e) {
+        console.error('Failed to load recipe', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [cardId])
+
+  const handleAiEdit = useCallback(async () => {
+    if (!aiInstructions.trim()) return
+    setAiLoading(true)
+    setAiStatus('Updating recipe…')
+    try {
+      const result = await editRecipe({
+        card_id: cardId,
+        instructions: aiInstructions,
+      })
+      showToast('Recipe updated!')
+      onClose()
+    } catch (e) {
+      setAiStatus(`Error: ${e.message}`)
+    } finally {
+      setAiLoading(false)
+    }
+  }, [cardId, aiInstructions, editRecipe, onClose])
+
+  const handleDirectSave = useCallback(async () => {
+    if (!directFields) return
+    setAiLoading(true)
+    setAiStatus('Saving…')
+    try {
+      await api.saveCardHtml({
+        card_id: cardId,
+        recipe_json: directFields,
+      })
+      await reload()
+      showToast('Recipe updated!')
+      onClose()
+    } catch (e) {
+      setAiStatus(`Error: ${e.message}`)
+    } finally {
+      setAiLoading(false)
+    }
+  }, [cardId, directFields, reload, onClose])
+
+  const handleDelete = useCallback(async () => {
+    if (!deleteConfirm) return
+    setDeleting(true)
+    try {
+      await deleteRecipe(cardId)
+      showToast('Recipe deleted')
+      onClose()
+    } catch (e) {
+      showToast(`Error: ${e.message}`)
+    } finally {
+      setDeleting(false)
+    }
+  }, [cardId, deleteConfirm, deleteRecipe, onClose])
+
+  const updateDirectField = useCallback((field, value) => {
+    setDirectFields(prev => ({ ...prev, [field]: value }))
+  }, [])
+
+  const updateDirectIngredient = useCallback((idx, field, value) => {
+    setDirectFields(prev => {
+      const ings = [...(prev.ingredients || [])]
+      ings[idx] = { ...ings[idx], [field]: value }
+      return { ...prev, ingredients: ings }
+    })
+  }, [])
+
+  const updateDirectStep = useCallback((idx, field, value) => {
+    setDirectFields(prev => {
+      const steps = [...(prev.steps || [])]
+      steps[idx] = { ...steps[idx], [field]: value }
+      return { ...prev, steps }
+    })
+  }, [])
+
+  if (loading) return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(42,26,14,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="modal-box"><p style={{ textAlign: 'center', color: 'var(--muted)' }}>Loading…</p></div>
+    </div>
+  )
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(42,26,14,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div className="modal-box modal-box--wide" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>✕</button>
+        <h2 className="modal-title">Edit Recipe</h2>
+
+        {/* Tabs */}
+        <div className="composer-modes" style={{ marginBottom: '1.2rem' }}>
+          {[
+            { key: 'ai', label: '✨ AI Edit' },
+            { key: 'direct', label: '✏️ Direct Edit' },
+            { key: 'delete', label: '🗑️ Delete' },
+          ].map(t => (
+            <button key={t.key} className={`composer-mode${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* AI Edit */}
+        {tab === 'ai' && (
+          <div>
+            <p className="modal-sub">Describe what you'd like to change and AI will update the recipe.</p>
+            <textarea
+              value={aiInstructions}
+              onChange={e => setAiInstructions(e.target.value)}
+              placeholder='E.g., "Make it spicier", "Add a vegetarian option", "Fix the cooking time"…'
+              style={{ minHeight: 120 }}
+            />
+            <button className="modal-submit" onClick={handleAiEdit} disabled={aiLoading || !aiInstructions.trim()}>
+              {aiLoading ? 'Updating…' : 'Update with AI'}
+            </button>
+            {aiStatus && <p style={{ marginTop: '0.9rem', fontSize: '0.85rem', textAlign: 'center', fontStyle: 'italic', color: 'var(--muted)' }}>{aiStatus}</p>}
+          </div>
+        )}
+
+        {/* Direct Edit */}
+        {tab === 'direct' && directFields && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.75rem' }}>
+              <div>
+                <label className="modal-label">Emoji</label>
+                <input type="text" value={directFields.emoji || ''} onChange={e => updateDirectField('emoji', e.target.value)} />
+              </div>
+              <div>
+                <label className="modal-label">Title</label>
+                <input type="text" value={directFields.title || ''} onChange={e => updateDirectField('title', e.target.value)} />
+              </div>
+            </div>
+
+            <label className="modal-label">Subtitle</label>
+            <input type="text" value={directFields.subtitle || ''} onChange={e => updateDirectField('subtitle', e.target.value)} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.5rem' }}>
+              <div><label className="modal-label">Servings</label><input type="text" value={directFields.servings || ''} onChange={e => updateDirectField('servings', e.target.value)} /></div>
+              <div><label className="modal-label">Prep</label><input type="text" value={directFields.prep_time || ''} onChange={e => updateDirectField('prep_time', e.target.value)} /></div>
+              <div><label className="modal-label">Cook</label><input type="text" value={directFields.cook_time || ''} onChange={e => updateDirectField('cook_time', e.target.value)} /></div>
+              <div><label className="modal-label">Temp</label><input type="text" value={directFields.temperature || ''} onChange={e => updateDirectField('temperature', e.target.value)} /></div>
+            </div>
+
+            <label className="modal-label">Ingredients</label>
+            {(directFields.ingredients || []).map((ing, i) => (
+              <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                <input type="text" value={ing.name || ''} onChange={e => updateDirectIngredient(i, 'name', e.target.value)} placeholder="Ingredient" style={{ flex: 2 }} />
+                <input type="text" value={ing.amount || ''} onChange={e => updateDirectIngredient(i, 'amount', e.target.value)} placeholder="Amount" style={{ flex: 1 }} />
+              </div>
+            ))}
+
+            <label className="modal-label" style={{ marginTop: '0.8rem' }}>Steps</label>
+            {(directFields.steps || []).map((s, i) => (
+              <div key={i} style={{ marginBottom: '0.5rem' }}>
+                <input type="text" value={s.title || ''} onChange={e => updateDirectStep(i, 'title', e.target.value)} placeholder="Step title" style={{ marginBottom: '0.3rem' }} />
+                <textarea value={s.detail || ''} onChange={e => updateDirectStep(i, 'detail', e.target.value)} placeholder="Step detail" style={{ minHeight: 50 }} />
+              </div>
+            ))}
+
+            <label className="modal-label">Chef's Note</label>
+            <textarea value={directFields.chefs_note || ''} onChange={e => updateDirectField('chefs_note', e.target.value)} style={{ minHeight: 50 }} />
+
+            <button className="modal-submit" onClick={handleDirectSave} disabled={aiLoading}>
+              {aiLoading ? 'Saving…' : 'Save Changes'}
+            </button>
+            {aiStatus && <p style={{ marginTop: '0.9rem', fontSize: '0.85rem', textAlign: 'center', fontStyle: 'italic', color: 'var(--muted)' }}>{aiStatus}</p>}
+          </div>
+        )}
+
+        {tab === 'direct' && !directFields && (
+          <p className="modal-sub">This recipe doesn't have structured data yet. Use AI Edit to modify it.</p>
+        )}
+
+        {/* Delete */}
+        {tab === 'delete' && (
+          <div>
+            <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+              Are you sure you want to delete <strong>{title}</strong>? This cannot be undone.
+            </p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.88rem' }}>
+              <input type="checkbox" checked={deleteConfirm} onChange={e => setDeleteConfirm(e.target.checked)} />
+              Yes, permanently delete this recipe
+            </label>
+            <button
+              className="modal-submit"
+              style={{ background: deleteConfirm ? '#c0392b' : 'var(--muted)' }}
+              onClick={handleDelete}
+              disabled={!deleteConfirm || deleting}
+            >
+              {deleting ? 'Deleting…' : 'Delete Recipe'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
