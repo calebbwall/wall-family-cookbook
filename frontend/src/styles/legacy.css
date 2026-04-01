@@ -663,21 +663,19 @@ nav {
 
 .back-header {
   background: var(--red);
-  padding: 1.1rem 1.4rem;
+  padding: 0.9rem 1.2rem;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
 .back-title {
   font-family: 'Playfair Display', serif;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--white);
   line-height: 1.2;
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -704,8 +702,8 @@ nav {
 .back-header-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .cook-now-btn {
@@ -2420,18 +2418,19 @@ footer strong {
 
 /* ── Add to Groceries button on recipe cards ──────────────── */
 .add-grocery-btn {
-  background: var(--tan);
-  color: var(--dark);
-  border: none;
-  padding: 0.4rem 0.7rem;
-  border-radius: 6px;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: var(--white);
+  padding: 0.3rem 0.65rem;
+  border-radius: 20px;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.2s;
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }
-.add-grocery-btn:hover { background: var(--tan-dark); }
+.add-grocery-btn:hover { background: rgba(255,255,255,0.35); }
 
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 600px) {
