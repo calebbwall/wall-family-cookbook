@@ -36,9 +36,11 @@ A family recipe website with AI-powered features for adding, editing, and chatti
 - `DATABASE_URL` - PostgreSQL connection string (auto-provisioned by Replit)
 
 ## Database
-- Table `recipes`: stores individual recipe cards (id, category, author_name, card_html, card_id, created_at)
+- Table `recipes`: stores individual recipe cards (id, category, author_name, card_html, card_id, created_at, recipe_json, source_type)
+- `recipe_json` column: structured JSON extracted by Gemini (enables Cook Now, cook mode, ingredient list, etc.)
 - Table `cookbook_html` (legacy): old single-row HTML storage, migrated from on first run
 - Pages are built dynamically by injecting recipe cards from DB into the HTML template
+- At startup, `backfill_recipe_json()` automatically fills in missing `recipe_json` for legacy cards using Gemini
 
 ## Running the App
 ```

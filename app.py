@@ -1906,6 +1906,45 @@ def serve_react(path):
         return 'Run "npm run build" in frontend/ to build the React app', 500
 
 
+# ── Startup helpers ─────────────────────────────────────────────────────────────
+
+def backfill_recipe_json():
+    """At startup, extract recipe_json for any legacy cards that don't have it yet."""
+    if not GEMINI_KEY:
+        print('[backfill] No GEMINI_API_KEY — skipping recipe_json backfill')
+        return
+    try:
+        with db_cursor() as cur:
+            cur.execute(
+                "SELECT card_id, category, card_html FROM recipes "
+                "WHERE recipe_json IS NULL OR recipe_json = '' ORDER BY created_at ASC"
+            )
+            rows = cur.fetchall()
+        if not rows:
+            print('[backfill] All recipes already have recipe_json — nothing to do')
+            return
+        print(f'[backfill] Backfilling recipe_json for {len(rows)} recipe(s)…')
+        ok = 0
+        for row in rows:
+            card_id  = row['card_id']
+            category = row.get('category', '')
+            html     = row.get('card_html', '')
+            try:
+                rj = extract_recipe_with_gemini(content=html, category_hint=category)
+                with db_cursor() as cur:
+                    cur.execute(
+                        "UPDATE recipes SET recipe_json = %s WHERE card_id = %s",
+                        (json.dumps(rj), card_id)
+                    )
+                print(f'[backfill]   ✓ {card_id}')
+                ok += 1
+            except Exception as e:
+                print(f'[backfill]   ✗ {card_id}: {e}')
+        print(f'[backfill] Done — {ok}/{len(rows)} recipes updated')
+    except Exception as e:
+        print(f'[backfill] Error during backfill: {e}')
+
+
 # ── Startup ────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
@@ -1924,6 +1963,8 @@ if __name__ == '__main__':
             print('[startup] No previous data found — starting with an empty cookbook')
     else:
         print(f'[startup] Loaded {recipe_count} recipe(s) from database')
+
+    backfill_recipe_json()
 
     print(f'Wall Family Cookbook running on http://0.0.0.0:{PORT}')
     app.run(host='0.0.0.0', port=PORT, debug=False)
