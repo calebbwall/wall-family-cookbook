@@ -6,7 +6,7 @@ function escHtml(str) {
   return div.innerHTML
 }
 
-export default function RecipeCard({ recipe, onEdit, onCook }) {
+export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
   const [flipped, setFlipped] = useState(false)
   const rj = recipe.recipeJson
 
@@ -83,6 +83,11 @@ export default function RecipeCard({ recipe, onEdit, onCook }) {
           <div className="back-header">
             <span className="back-title">{rj.emoji || '🍽️'} {rj.title}</span>
             <div className="back-header-actions">
+              {rj.ingredients?.length > 0 && (
+                <button className="add-grocery-btn" onClick={e => { e.stopPropagation(); onAddToGrocery(recipe) }}>
+                  🛒 Add to Groceries
+                </button>
+              )}
               <button className="cook-now-btn" onClick={e => { e.stopPropagation(); onCook(recipe) }}>
                 🍳 Cook Now
               </button>

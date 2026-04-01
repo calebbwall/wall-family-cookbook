@@ -10,7 +10,7 @@ const EMPTY_MESSAGES = {
   dessert: { emoji: '🍪', title: 'No desserts yet', sub: 'Got a sweet tooth? Add one!' },
 }
 
-export default function RecipeSection({ category, onEdit, onCook, onAddRecipe }) {
+export default function RecipeSection({ category, onEdit, onCook, onAddRecipe, onAddToGrocery }) {
   const { getGrouped } = useRecipes()
   const grouped = getGrouped()
   const recipes = grouped[category] || []
@@ -43,6 +43,7 @@ export default function RecipeSection({ category, onEdit, onCook, onAddRecipe })
                 recipe={recipe}
                 onEdit={onEdit}
                 onCook={onCook}
+                onAddToGrocery={onAddToGrocery}
               />
             ))}
           </div>

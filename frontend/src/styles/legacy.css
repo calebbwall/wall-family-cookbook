@@ -587,6 +587,8 @@ nav {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .front-title {
@@ -596,11 +598,15 @@ nav {
   color: var(--dark);
   margin-bottom: 0.3rem;
   line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .front-sub { font-size: 0.83rem; color: var(--muted); font-style: italic; margin-bottom: 1rem; }
 
-.front-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.front-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; overflow: hidden; max-height: 3.6rem; }
 
 .front-author {
   font-size: 0.72rem;
@@ -670,6 +676,11 @@ nav {
   font-weight: 700;
   color: var(--white);
   line-height: 1.2;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .back-flip-btn {
@@ -698,8 +709,8 @@ nav {
 }
 
 .cook-now-btn {
-  background: var(--red);
-  border: none;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
   color: var(--white);
   padding: 0.35rem 0.85rem;
   border-radius: 20px;
@@ -708,10 +719,9 @@ nav {
   cursor: pointer;
   transition: background 0.2s, box-shadow 0.2s;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.45);
   letter-spacing: 0.02em;
 }
-.cook-now-btn:hover { background: #c0392b; box-shadow: 0 3px 12px rgba(220, 53, 69, 0.6); }
+.cook-now-btn:hover { background: rgba(255,255,255,0.35); }
 
 .back-scroll {
   flex: 1;

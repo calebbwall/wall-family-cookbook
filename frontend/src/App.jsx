@@ -35,6 +35,20 @@ function AppContent() {
     }
   }, [chatHook])
 
+  const handleAddToGrocery = useCallback(async (recipe) => {
+    const rj = recipe.recipeJson
+    if (!rj) return
+    const servings = parseInt(rj.servings) || 1
+    const added = await grocery.addRecipes([{
+      cardId: recipe.cardId,
+      title: rj.title,
+      servings,
+      baseServings: servings,
+    }])
+    if (added > 0) showToast(`Added "${rj.title}" to grocery list!`)
+    else showToast(`"${rj.title}" is already in your grocery list`)
+  }, [grocery])
+
   const handleCloseCook = useCallback(() => {
     setCookModeRecipe(null)
     chatHook.clearRecipeContext()
@@ -94,6 +108,7 @@ function AppContent() {
               onEdit={setEditTarget}
               onCook={handleCook}
               onAddRecipe={() => setAddModalOpen(true)}
+              onAddToGrocery={handleAddToGrocery}
             />
           ))}
           <footer>

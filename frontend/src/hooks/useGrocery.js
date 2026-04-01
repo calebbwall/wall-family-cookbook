@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as api from '../api'
 
 const DEFAULT_STATE = {
@@ -281,15 +281,23 @@ export function useGrocery() {
     await save(DEFAULT_STATE)
   }, [save])
 
-  const computed = computeGroceryList(groceryState, allRecipes)
+  const computed = useMemo(
+    () => computeGroceryList(groceryState, allRecipes),
+    [groceryState, allRecipes]
+  )
+
+  // Keep a ref so runMerge can read computed without it being a dependency
+  const computedRef = useRef(computed)
+  computedRef.current = computed
 
   // AI merge
   const runMerge = useCallback(async () => {
     const cacheKey = JSON.stringify(groceryState.recipes)
     if (mergedCacheKeyRef.current === cacheKey && mergedItems) return
 
+    const currentComputed = computedRef.current
     const flatItems = []
-    for (const items of Object.values(computed)) {
+    for (const items of Object.values(currentComputed)) {
       for (const item of items) {
         flatItems.push({ name: item.name, quantity: item.quantity, unit: item.unit, category: item.category, sources: item.sources })
       }
@@ -300,6 +308,7 @@ export function useGrocery() {
     try {
       const data = await api.mergeIngredients(flatItems)
       if (data.warning) {
+        mergedCacheKeyRef.current = cacheKey
         setMergeStatus('error')
       } else {
         mergedCacheKeyRef.current = cacheKey
@@ -307,9 +316,10 @@ export function useGrocery() {
         setMergeStatus('done')
       }
     } catch {
+      mergedCacheKeyRef.current = cacheKey
       setMergeStatus('error')
     }
-  }, [groceryState.recipes, computed, mergedItems])
+  }, [groceryState.recipes, mergedItems])
 
   return {
     groceryState,
