@@ -21,7 +21,7 @@ import psycopg2.extras
 import requests as http_requests
 from flask import (
     Flask, request, redirect, make_response,
-    jsonify, Response
+    jsonify, Response, send_from_directory
 )
 
 # ── App & paths ────────────────────────────────────────────────────────────────
@@ -1194,15 +1194,47 @@ def health():
     return jsonify(status='ok')
 
 
-@app.get('/')
-@app.get('/index.html')
+@app.get('/api/recipes')
 @require_auth
-def index():
+def list_recipes():
+    """Return all recipes as structured JSON for the React frontend."""
     try:
-        return Response(build_page(), mimetype='text/html')
+        with db_cursor() as cur:
+            cur.execute('SELECT * FROM recipes ORDER BY created_at ASC')
+            rows = cur.fetchall()
+        result = []
+        for r in rows:
+            rj = None
+            if r.get('recipe_json'):
+                try:
+                    rj = json.loads(r['recipe_json'])
+                except (json.JSONDecodeError, TypeError):
+                    rj = None
+            result.append({
+                'cardId':    r['card_id'],
+                'category':  r['category'],
+                'author':    r.get('author_name', ''),
+                'createdAt': r['created_at'].isoformat() if r.get('created_at') else None,
+                'recipeJson': rj,
+                'cardHtml':  r['card_html'] if not rj else None,
+            })
+        return jsonify(recipes=result)
     except Exception as e:
-        app.logger.error(f'[page] {e}')
-        return 'Error loading cookbook — please refresh', 500
+        app.logger.error(f'[list-recipes] {e}')
+        return jsonify(error=str(e)), 500
+
+
+# Legacy HTML index — kept as fallback when React build is not present.
+# The serve_react catch-all route handles / and /index.html now.
+# @app.get('/')
+# @app.get('/index.html')
+# @require_auth
+# def index():
+#     try:
+#         return Response(build_page(), mimetype='text/html')
+#     except Exception as e:
+#         app.logger.error(f'[page] {e}')
+#         return 'Error loading cookbook — please refresh', 500
 
 
 @app.post('/api/upload-media')
@@ -1815,6 +1847,32 @@ Input ingredients:
         # Graceful degradation: return original list unchanged
         fallback = ingredients if 'ingredients' in dir() else []
         return jsonify(merged=fallback, warning=True)
+
+
+# ── Serve React SPA (catch-all for non-API, non-upload paths) ─────────────────
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    if path.startswith('api/') or path.startswith('uploads/'):
+        return Response('Not found', 404)
+    # Auth check — show gate page when not logged in
+    token = request.cookies.get(COOKIE_NAME, '')
+    if token != VALID_TOKEN:
+        return Response(build_gate_page(), mimetype='text/html')
+    # Serve React build
+    dist = BASE_DIR / 'public' / 'dist'
+    file = dist / path
+    if path and file.exists():
+        return send_from_directory(str(dist), path)
+    index_file = dist / 'index.html'
+    if index_file.exists():
+        return send_from_directory(str(dist), 'index.html')
+    # Fallback to legacy HTML if dist not built yet
+    try:
+        return Response(build_page(), mimetype='text/html')
+    except Exception:
+        return 'Run "npm run build" in frontend/ to build the React app', 500
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
