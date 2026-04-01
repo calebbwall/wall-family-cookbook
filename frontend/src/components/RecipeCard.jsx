@@ -22,7 +22,7 @@ export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
     }
   }, [flipped])
 
-  // Legacy card_html fallback
+  // Legacy card_html fallback — render HTML but add grocery/cook buttons
   if (!rj && recipe.cardHtml) {
     return (
       <div
@@ -30,8 +30,18 @@ export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
         tabIndex={0}
         onClick={handleFlip}
         onKeyDown={handleKeyDown}
-        dangerouslySetInnerHTML={{ __html: recipe.cardHtml }}
-      />
+      >
+        <div dangerouslySetInnerHTML={{ __html: recipe.cardHtml }} />
+        {/* Overlay buttons on legacy cards */}
+        <div className="legacy-card-actions">
+          <button className="add-grocery-btn" onClick={e => { e.stopPropagation(); onAddToGrocery(recipe) }}>
+            🛒 Add to Groceries
+          </button>
+          <button className="cook-now-btn" onClick={e => { e.stopPropagation(); onCook(recipe) }}>
+            🍳 Cook Now
+          </button>
+        </div>
+      </div>
     )
   }
 
@@ -83,11 +93,9 @@ export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
           <div className="back-header">
             <span className="back-title">{rj.emoji || '🍽️'} {rj.title}</span>
             <div className="back-header-actions">
-              {rj.ingredients?.length > 0 && (
-                <button className="add-grocery-btn" onClick={e => { e.stopPropagation(); onAddToGrocery(recipe) }}>
-                  🛒 Add to Groceries
-                </button>
-              )}
+              <button className="add-grocery-btn" onClick={e => { e.stopPropagation(); onAddToGrocery(recipe) }}>
+                🛒 Add to Groceries
+              </button>
               <button className="cook-now-btn" onClick={e => { e.stopPropagation(); onCook(recipe) }}>
                 🍳 Cook Now
               </button>

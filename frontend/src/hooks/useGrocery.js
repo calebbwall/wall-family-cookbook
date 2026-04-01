@@ -227,7 +227,6 @@ export function useGrocery() {
       setMergedItems(null)
       setMergeStatus(null)
       await save(newState)
-      // Refresh recipes data
       const recipes = await api.getRecipesJson()
       setAllRecipes(recipes)
     }
@@ -293,7 +292,7 @@ export function useGrocery() {
   // AI merge
   const runMerge = useCallback(async () => {
     const cacheKey = JSON.stringify(groceryState.recipes)
-    if (mergedCacheKeyRef.current === cacheKey && mergedItems) return
+    if (mergedCacheKeyRef.current === cacheKey) return
 
     const currentComputed = computedRef.current
     const flatItems = []
@@ -319,7 +318,7 @@ export function useGrocery() {
       mergedCacheKeyRef.current = cacheKey
       setMergeStatus('error')
     }
-  }, [groceryState.recipes, mergedItems])
+  }, [groceryState.recipes])
 
   return {
     groceryState,
