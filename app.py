@@ -1775,6 +1775,48 @@ def save_grocery():
         return jsonify(error=str(e)), 500
 
 
+@app.post('/api/grocery/merge-ingredients')
+@require_auth
+def merge_ingredients():
+    """Use Gemini to intelligently merge semantically equivalent ingredients."""
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        ingredients = data.get('ingredients', [])
+        if not isinstance(ingredients, list) or len(ingredients) < 1 or len(ingredients) > 200:
+            return jsonify(error='ingredients must be a list of 1-200 items'), 400
+
+        items_text = json.dumps(ingredients, indent=2)
+        prompt = f"""You are a smart grocery list assistant. Merge this list of ingredients into a consolidated shopping list.
+
+Rules:
+- Merge semantically equivalent ingredients (e.g. "egg yolks" + "eggs" → "eggs", taking the larger count needed)
+- Combine compatible units (e.g. "1 cup butter" + "2 sticks butter" → combined in the most useful unit for shopping)
+- Remove exact duplicates
+- Preserve all source recipe names
+- Category must be one of: produce, dairy, meat, bakery, pantry, spices, frozen, other
+
+Return ONLY a JSON array with objects having these fields:
+{{"name": string, "quantity": number, "unit": string, "category": string, "sources": string[]}}
+
+Input ingredients:
+{items_text}"""
+
+        gen_cfg = {'temperature': 0.1, 'responseMimeType': 'application/json'}
+        result_text = _gemini_text(
+            [{'role': 'user', 'parts': [{'text': prompt}]}],
+            gen_config=gen_cfg
+        )
+        merged = json.loads(result_text)
+        if not isinstance(merged, list):
+            raise ValueError('Gemini returned non-list')
+        return jsonify(merged=merged, warning=False)
+    except Exception as e:
+        app.logger.error(f'[merge-ingredients] {e}')
+        # Graceful degradation: return original list unchanged
+        fallback = ingredients if 'ingredients' in dir() else []
+        return jsonify(merged=fallback, warning=True)
+
+
 # ── Startup ────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
