@@ -1881,7 +1881,7 @@ Input ingredients:
         return jsonify(merged=fallback, warning=True)
 
 
-# ── Serve React SPA (catch-all for non-API, non-upload paths) ─────────────────
+# ── Serve cookbook (catch-all for non-API, non-upload paths) ──────────────────
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -1892,19 +1892,8 @@ def serve_react(path):
     token = request.cookies.get(COOKIE_NAME, '')
     if token != VALID_TOKEN:
         return Response(build_gate_page(), mimetype='text/html')
-    # Serve React build
-    dist = BASE_DIR / 'public' / 'dist'
-    file = dist / path
-    if path and file.exists():
-        return send_from_directory(str(dist), path)
-    index_file = dist / 'index.html'
-    if index_file.exists():
-        return send_from_directory(str(dist), 'index.html')
-    # Fallback to legacy HTML if dist not built yet
-    try:
-        return Response(build_page(), mimetype='text/html')
-    except Exception:
-        return 'Run "npm run build" in frontend/ to build the React app', 500
+    # Serve the legacy cookbook HTML
+    return Response(build_page(), mimetype='text/html')
 
 
 # ── Startup helpers ─────────────────────────────────────────────────────────────
