@@ -36,4 +36,5 @@ externalPort = 80
 [deployment]
 deploymentTarget = "autoscale"
 publicDir = "."
-run = ["python", "app.py"]
+run = ["gunicorn", "--bind=0.0.0.0:5000", "--reuse-port", "app:app"]
+build = ["bash", "-c", "cd frontend && npm install && npm run build"]

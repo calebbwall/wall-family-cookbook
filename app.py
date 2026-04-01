@@ -11,6 +11,7 @@ import uuid
 import json
 import base64
 import time
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 from functools import wraps
@@ -1945,11 +1946,11 @@ def backfill_recipe_json():
         print(f'[backfill] Error during backfill: {e}')
 
 
-# ── Startup ────────────────────────────────────────────────────────────────────
+# ── Startup (runs for both `python app.py` and gunicorn) ────────────────────────
 
-if __name__ == '__main__':
+def _run_startup():
+    """Initialise DB and kick off background tasks. Called at module import time."""
     print('[startup] HTML template loaded')
-
     ensure_table()
 
     with db_cursor() as cur:
@@ -1964,7 +1965,15 @@ if __name__ == '__main__':
     else:
         print(f'[startup] Loaded {recipe_count} recipe(s) from database')
 
-    backfill_recipe_json()
+    # Run the potentially-slow JSON backfill in a background thread so the
+    # server can start accepting requests immediately.
+    t = threading.Thread(target=backfill_recipe_json, daemon=True)
+    t.start()
 
+
+_run_startup()
+
+
+if __name__ == '__main__':
     print(f'Wall Family Cookbook running on http://0.0.0.0:{PORT}')
     app.run(host='0.0.0.0', port=PORT, debug=False)
