@@ -516,6 +516,8 @@ function _computeGroceryList(state, allRecipes) {
 let _groceryState = { recipes: [], manualItems: [], pantry: {}, checked: [], locked: {} };
 let _groceryDirty = true;
 let _groceryComputed = {};
+let _mergedCache = null;
+let _mergedCacheKey = null;
 let _grocerySaveTimer = null;
 
 async function _loadGroceryState() {
@@ -595,6 +597,8 @@ async function addRecipeToGrocery(cardId) {
 function removeRecipeFromGrocery(cardId) {
   _groceryState.recipes = _groceryState.recipes.filter(r => r.cardId !== cardId);
   _groceryDirty = true;
+  _mergedCache = null;
+  _mergedCacheKey = null;
   _saveGroceryState();
   _updateGroceryBadge();
   _renderGroceryTab();
@@ -1895,6 +1899,7 @@ let _groceryTabVisible = false;
 
 function toggleGroceryTab() {
   _groceryTabVisible = !_groceryTabVisible;
+  document.body.classList.toggle('grocery-open', _groceryTabVisible);
   const tab = document.getElementById('grocery-tab');
   const sections = document.querySelectorAll('.section, .section-divider, .hero, footer');
   if (_groceryTabVisible) {
@@ -1914,6 +1919,8 @@ async function _renderGroceryTab() {
 }
 
 async function _doRenderGroceryTab() {
+  const listElEarly = document.getElementById('grocery-list');
+  if (listElEarly) listElEarly.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--muted)">Loading…</p>';
   const allRecipes = await _fetchAllRecipes();
   const computed = _computeGroceryList(_groceryState, allRecipes);
   _groceryComputed = computed;
@@ -1936,7 +1943,98 @@ async function _doRenderGroceryTab() {
     recipesEl.appendChild(chip);
   }
 
-  // Render grocery list
+  // Render grocery list (unmerged first for immediate display)
+  _renderGroceryItems(computed);
+
+  // AI merge: progressive enhancement
+  const cacheKey = JSON.stringify(_groceryState.recipes);
+  const flatItems = [];
+  for (const items of Object.values(computed)) {
+    for (const item of items) flatItems.push({ name: item.name, quantity: item.quantity, unit: item.unit, category: item.category, sources: item.sources });
+  }
+
+  if (flatItems.length > 0) {
+    if (_mergedCache && _mergedCacheKey === cacheKey) {
+      // Use cached merged result
+      _renderMergedGroceryItems(_mergedCache);
+      _setMergeIndicator('done');
+    } else {
+      _setMergeIndicator('loading');
+      fetch('/api/grocery/merge-ingredients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients: flatItems })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.warning) {
+          _setMergeIndicator('error');
+        } else {
+          _mergedCache = data.merged;
+          _mergedCacheKey = cacheKey;
+          _renderMergedGroceryItems(data.merged);
+          _setMergeIndicator('done');
+        }
+      })
+      .catch(() => { _setMergeIndicator('error'); });
+    }
+  }
+
+  // Render pantry section
+  _renderPantry();
+}
+
+function _setMergeIndicator(state) {
+  let el = document.getElementById('grocery-merge-status');
+  if (!el) {
+    el = document.createElement('span');
+    el.id = 'grocery-merge-status';
+    el.style.cssText = 'font-size:0.75rem;margin-left:0.75rem;font-weight:600;';
+    const titleEl = document.querySelector('.grocery-title');
+    if (titleEl) titleEl.appendChild(el);
+  }
+  if (state === 'loading') {
+    el.textContent = '⏳ Merging…';
+    el.style.color = 'var(--muted)';
+  } else if (state === 'done') {
+    el.textContent = '✓ AI-merged';
+    el.style.color = 'var(--green, #2a7d2a)';
+  } else if (state === 'error') {
+    el.textContent = 'Smart merge unavailable';
+    el.style.color = 'var(--muted)';
+  }
+}
+
+function _renderMergedGroceryItems(mergedItems) {
+  // Re-group merged items by category
+  const grouped = {};
+  for (const item of mergedItems) {
+    const cat = item.category || 'other';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push({
+      key: (item.name || '').toLowerCase().replace(/\s+/g, '-') + '|' + (item.unit || ''),
+      name: item.name,
+      normName: (item.name || '').toLowerCase(),
+      quantity: item.quantity,
+      unit: item.unit,
+      category: cat,
+      sources: item.sources || [],
+      locked: false,
+      pantryReduced: false,
+      isManual: false,
+    });
+  }
+  const sortedCats = Object.keys(grouped).sort(
+    (a, b) => ((_CAT_META[a]?.order ?? 99) - (_CAT_META[b]?.order ?? 99))
+  );
+  const result = {};
+  for (const cat of sortedCats) {
+    result[cat] = grouped[cat].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  _renderGroceryItems(result);
+}
+
+function _renderGroceryItems(computed) {
   const listEl = document.getElementById('grocery-list');
   const emptyEl = document.getElementById('grocery-empty');
   const hasItems = Object.keys(computed).length > 0;
@@ -1996,9 +2094,6 @@ async function _doRenderGroceryTab() {
       listEl.appendChild(section);
     }
   }
-
-  // Render pantry section
-  _renderPantry();
 }
 
 function _renderPantry() {
@@ -2047,6 +2142,8 @@ function changeGroceryServings(cardId, delta) {
   if (!sr) return;
   sr.servings = Math.max(1, (sr.servings || 1) + delta);
   _groceryDirty = true;
+  _mergedCache = null;
+  _mergedCacheKey = null;
   _saveGroceryState();
   _renderGroceryTab();
 }
@@ -2096,6 +2193,9 @@ async function applyRecipePicker() {
   });
   if (added > 0) {
     _groceryDirty = true;
+    _invalidateRecipeCache();
+    _mergedCache = null;
+    _mergedCacheKey = null;
     _saveGroceryState();
     _updateGroceryBadge();
     _showToast(`Added ${added} recipe${added > 1 ? 's' : ''}!`);

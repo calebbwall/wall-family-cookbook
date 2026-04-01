@@ -22,7 +22,6 @@
     <li><a href="#snacks">Snacks</a></li>
     <li><a href="#breakfast">Breakfast</a></li>
     <li><a href="#desserts">Desserts</a></li>
-    <li><a href="#" onclick="event.preventDefault();toggleGroceryTab()" id="nav-grocery-link" class="nav-grocery-link">🛒 Groceries <span class="grocery-badge" id="grocery-badge" style="display:none">0</span></a></li>
   </ul>
   <div class="nav-right">
     <input class="nav-search" id="recipe-search" type="search"
@@ -33,6 +32,7 @@
       <option value="az">A → Z</option>
       <option value="za">Z → A</option>
     </select>
+    <button class="nav-grocery-btn" onclick="toggleGroceryTab()" id="nav-grocery-link">🛒 Groceries <span class="grocery-badge" id="grocery-badge" style="display:none">0</span></button>
     <button class="nav-add-btn" onclick="openAddModal()">+ Add Recipe</button>
   </div>
 </nav>
@@ -45,7 +45,6 @@
   <a href="#snacks">🍿 Snacks</a>
   <a href="#breakfast">🍳 Breakfast</a>
   <a href="#desserts">🍪 Desserts</a>
-  <a href="#" onclick="event.preventDefault();toggleGroceryTab()" class="mobile-grocery-link">🛒 Groceries <span class="grocery-badge-mobile" id="grocery-badge-mobile" style="display:none">0</span></a>
 </nav>
 
 <!-- Hero -->
@@ -628,6 +627,11 @@
       <button class="step-zoom-next" onclick="stepZoomNav(1)" aria-label="Next step">Next →</button>
     </div>
   </div>
+</div>
+
+<!-- Mobile-only bottom grocery bar -->
+<div class="mobile-grocery-bar" id="mobile-grocery-bar">
+  <button onclick="toggleGroceryTab()">🛒 Groceries <span class="grocery-badge-mobile" id="grocery-badge-mobile" style="display:none">0</span></button>
 </div>
 
 <!-- Chat FAB -->
