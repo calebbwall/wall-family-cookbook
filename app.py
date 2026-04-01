@@ -267,7 +267,7 @@ def build_page():
 # ── Auth ───────────────────────────────────────────────────────────────────────
 
 def make_auth_token(passphrase):
-    return hmac.new(b'wfc-2024-salt', passphrase.encode('utf-8'), hashlib.sha256).hexdigest()
+    return hmac.new(b'wfc-2026-apr-salt', passphrase.encode('utf-8'), hashlib.sha256).hexdigest()
 
 VALID_TOKEN = make_auth_token(PASSPHRASE)
 
@@ -1097,37 +1097,43 @@ def build_recipe_catalog(rows):
     for section_key, recipes in sections.items():
         lines.append(f'[{section_key}]')
         for recipe in recipes:
-            c     = recipe['card_html']
-            title = re.search(r'class="front-title">([^<]+)<', c)
-            title = title.group(1).strip() if title else '?'
-            sub   = re.search(r'class="front-sub">([^<]+)<', c)
-            sub   = sub.group(1).strip() if sub else ''
-            chips = ', '.join(m.group(1) for m in re.finditer(r'class="chip">([^<]+)<', c))
-            temp  = re.search(r'class="b-temp[^"]*">([^<]+)<', c)
-            time_ = re.search(r'class="b-time[^"]*">([^<]+)<', c)
-            # Extract ingredients: qty + name (simple single-line pattern, safe on large HTML)
-            ings  = []
-            for qty_m, name_m in zip(
-                    re.finditer(r'class="b-ing-qty[^"]*">([^<]+)<', c),
-                    re.finditer(r'class="b-ing-name[^"]*">([^<]+)<', c)):
-                ings.append(f'{qty_m.group(1).strip()} {name_m.group(1).strip()}')
-            # Extract steps (single-line text nodes only)
-            steps = [m.group(1).strip() for m in
-                     re.finditer(r'class="b-step[^"]*">([^<]+)<', c) if m.group(1).strip()]
+            # Prefer structured recipe_json over HTML parsing
+            rj = None
+            if recipe.get('recipe_json'):
+                try:
+                    rj = json.loads(recipe['recipe_json']) if isinstance(recipe['recipe_json'], str) else recipe['recipe_json']
+                except (json.JSONDecodeError, TypeError):
+                    rj = None
 
-            line  = f'- {title} (by {recipe["author_name"]})'
-            if chips: line += f': {chips}'
-            if sub:   line += f' — {sub}'
-            if temp or time_:
-                params = []
-                if temp:  params.append(temp.group(1).strip())
-                if time_: params.append(time_.group(1).strip())
-                line += f' [{", ".join(params)}]'
-            lines.append(line)
-            for ing in ings:
-                lines.append(f'    Ingredient: {ing}')
-            for i, step in enumerate(steps, 1):
-                lines.append(f'    Step {i}: {step}')
+            if rj:
+                title = rj.get('title', '?')
+                sub   = rj.get('subtitle', '')
+                chips_parts = [rj.get('servings', ''), rj.get('temperature', ''), rj.get('cook_time', '')]
+                chips = ', '.join(c for c in chips_parts if c)
+                line  = f'- {title} (by {recipe["author_name"]})'
+                if chips: line += f': {chips}'
+                if sub:   line += f' — {sub}'
+                lines.append(line)
+                for ing in rj.get('ingredients', []):
+                    lines.append(f'    Ingredient: {ing.get("amount", "")} {ing.get("name", "")}')
+                for i, step in enumerate(rj.get('steps', []), 1):
+                    detail = step.get('detail', '')
+                    lines.append(f'    Step {i}: {detail}')
+            else:
+                # Fallback: parse card_html with regex
+                c     = recipe['card_html']
+                title = re.search(r'class="front-title">([^<]+)<', c)
+                title = title.group(1).strip() if title else '?'
+                sub   = re.search(r'class="front-sub">([^<]+)<', c)
+                sub   = sub.group(1).strip() if sub else ''
+                chips = ', '.join(m.group(1) for m in re.finditer(r'class="chip">([^<]+)<', c))
+
+                line  = f'- {title} (by {recipe["author_name"]})'
+                if chips: line += f': {chips}'
+                if sub:   line += f' — {sub}'
+                lines.append(line)
+                for name_m in re.finditer(r'class="b-ing-name[^"]*">([^<]+)<', c):
+                    lines.append(f'    Ingredient: {name_m.group(1).strip()}')
 
     return '\n'.join(lines)
 
@@ -1183,7 +1189,7 @@ def add_household():
 
 @app.post('/api/logout')
 def logout():
-    resp = make_response(redirect('/', 302))
+    resp = make_response(jsonify(success=True))
     resp.delete_cookie(COOKIE_NAME, path='/', samesite='None', secure=True)
     resp.delete_cookie('wfc_household', path='/', samesite='None', secure=True)
     return resp
@@ -1493,12 +1499,37 @@ def edit_recipe():
         if not row:
             return jsonify(error='Recipe not found'), 404
 
+        # If recipe has structured JSON, use it as context for the edit
+        existing_rj = None
+        if row.get('recipe_json'):
+            try:
+                existing_rj = json.loads(row['recipe_json'])
+            except (json.JSONDecodeError, TypeError):
+                existing_rj = None
+
         card_text    = strip_card_to_text(row['card_html'])
         prompt       = build_edit_prompt(card_text, edit_instructions.strip(), card_id)
         new_card_html = generate_card_html(prompt)
 
+        # Re-extract structured JSON from the updated card so recipe_json stays in sync
+        new_rj = None
+        if existing_rj:
+            try:
+                new_text = strip_card_to_text(new_card_html)
+                category_hint = row.get('category', '')
+                new_rj = extract_recipe_with_gemini(new_text, category_hint=category_hint)
+            except Exception as extract_err:
+                app.logger.warning(f'[edit-recipe] Failed to re-extract JSON: {extract_err}')
+                new_rj = None
+
         with db_cursor() as cur:
-            cur.execute('UPDATE recipes SET card_html = %s WHERE card_id = %s', (new_card_html, card_id))
+            if new_rj:
+                cur.execute(
+                    'UPDATE recipes SET card_html = %s, recipe_json = %s WHERE card_id = %s',
+                    (new_card_html, json.dumps(new_rj), card_id)
+                )
+            else:
+                cur.execute('UPDATE recipes SET card_html = %s WHERE card_id = %s', (new_card_html, card_id))
 
         return jsonify(success=True, cardId=card_id)
 
