@@ -657,19 +657,22 @@ nav {
 
 .back-header {
   background: var(--red);
-  padding: 1.1rem 1.4rem;
+  padding: 0.8rem 1rem;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
 .back-title {
   font-family: 'Playfair Display', serif;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--white);
   line-height: 1.2;
+  flex: 1;
+  min-width: 0;
 }
 
 .back-flip-btn {
@@ -692,26 +695,26 @@ nav {
 
 .back-header-actions {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
 .cook-now-btn {
-  background: var(--red);
-  border: none;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.35);
   color: var(--white);
-  padding: 0.35rem 0.85rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
+  transition: background 0.2s;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.45);
-  letter-spacing: 0.02em;
+  text-align: center;
 }
-.cook-now-btn:hover { background: #c0392b; box-shadow: 0 3px 12px rgba(220, 53, 69, 0.6); }
+.cook-now-btn:hover { background: rgba(255,255,255,0.3); }
 
 .back-scroll {
   flex: 1;
@@ -2413,13 +2416,14 @@ footer strong {
   background: var(--tan);
   color: var(--dark);
   border: none;
-  padding: 0.4rem 0.7rem;
+  padding: 0.3rem 0.65rem;
   border-radius: 6px;
   font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
   white-space: nowrap;
+  text-align: center;
 }
 .add-grocery-btn:hover { background: var(--tan-dark); }
 
