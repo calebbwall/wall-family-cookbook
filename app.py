@@ -1814,8 +1814,8 @@ def serve_cookbook(path):
     token = request.cookies.get(COOKIE_NAME, '')
     if token != VALID_TOKEN:
         return Response(build_gate_page(), mimetype='text/html')
-    # Serve the cookbook
-    return Response(build_page(), mimetype='text/html')
+    # Serve the cookbook SPA
+    return app.send_static_file('index.html')
 
 
 # ── Startup helpers ─────────────────────────────────────────────────────────────
