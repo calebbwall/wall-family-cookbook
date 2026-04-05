@@ -5,7 +5,7 @@ import { showToast } from '../utils'
 
 export default function EditRecipeModal({ cardId, onClose }) {
   const { editRecipe, deleteRecipe, reload } = useRecipes()
-  const [tab, setTab] = useState('ai') // ai | direct | delete
+  const [tab, setTab] = useState('ai') // ai | direct | history | delete
   const [loading, setLoading] = useState(true)
   const [cardHtml, setCardHtml] = useState('')
   const [recipeJson, setRecipeJson] = useState(null)
@@ -18,6 +18,11 @@ export default function EditRecipeModal({ cardId, onClose }) {
 
   // Direct edit
   const [directFields, setDirectFields] = useState(null)
+
+  // History
+  const [versions, setVersions] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [restoringId, setRestoringId] = useState(null)
 
   // Delete
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -44,6 +49,31 @@ export default function EditRecipeModal({ cardId, onClose }) {
     }
     load()
   }, [cardId])
+
+  // Load history when history tab is selected
+  useEffect(() => {
+    if (tab === 'history' && versions.length === 0 && !historyLoading) {
+      setHistoryLoading(true)
+      api.getRecipeHistory(cardId)
+        .then(v => setVersions(v))
+        .catch(e => console.error('Failed to load history', e))
+        .finally(() => setHistoryLoading(false))
+    }
+  }, [tab, cardId, versions.length, historyLoading])
+
+  const handleRestore = useCallback(async (versionId) => {
+    setRestoringId(versionId)
+    try {
+      await api.restoreRecipeVersion(versionId)
+      await reload()
+      showToast('Recipe restored to previous version!')
+      onClose()
+    } catch (e) {
+      showToast(`Error: ${e.message}`)
+    } finally {
+      setRestoringId(null)
+    }
+  }, [reload, onClose])
 
   const handleAiEdit = useCallback(async () => {
     if (!aiInstructions.trim()) return
@@ -133,6 +163,7 @@ export default function EditRecipeModal({ cardId, onClose }) {
           {[
             { key: 'ai', label: '✨ AI Edit' },
             { key: 'direct', label: '✏️ Direct Edit' },
+            { key: 'history', label: '📜 History' },
             { key: 'delete', label: '🗑️ Delete' },
           ].map(t => (
             <button key={t.key} className={`composer-mode${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key)}>
@@ -210,6 +241,50 @@ export default function EditRecipeModal({ cardId, onClose }) {
 
         {tab === 'direct' && !directFields && (
           <p className="modal-sub">This recipe doesn't have structured data yet. Use AI Edit to modify it.</p>
+        )}
+
+        {/* History */}
+        {tab === 'history' && (
+          <div>
+            {historyLoading && <p style={{ textAlign: 'center', color: 'var(--muted)' }}>Loading history…</p>}
+            {!historyLoading && versions.length === 0 && (
+              <p className="modal-sub">No edit history yet. History is saved each time you edit a recipe.</p>
+            )}
+            {versions.map(v => {
+              const rj = v.recipeJson
+              const date = v.createdAt ? new Date(v.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
+              return (
+                <div key={v.id} style={{ padding: '0.8rem', marginBottom: '0.6rem', background: 'var(--offwhite)', borderRadius: 8, border: '1px solid var(--tan)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{rj?.title || 'Recipe'}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '0.2rem' }}>{date}</div>
+                      {v.editedBy && <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>by {v.editedBy}</div>}
+                      {v.editNote && <div style={{ fontSize: '0.8rem', marginTop: '0.3rem', fontStyle: 'italic' }}>"{v.editNote}"</div>}
+                    </div>
+                    <button
+                      className="grocery-btn"
+                      style={{ fontSize: '0.75rem', flexShrink: 0 }}
+                      onClick={() => handleRestore(v.id)}
+                      disabled={restoringId === v.id}
+                    >
+                      {restoringId === v.id ? 'Restoring…' : 'Restore'}
+                    </button>
+                  </div>
+                  {rj?.ingredients && (
+                    <details style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
+                      <summary style={{ cursor: 'pointer', color: 'var(--muted)' }}>View ingredients ({rj.ingredients.length})</summary>
+                      <ul style={{ margin: '0.3rem 0 0 1rem', padding: 0 }}>
+                        {rj.ingredients.map((ing, i) => (
+                          <li key={i}>{ing.amount} {ing.name}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
 
         {/* Delete */}

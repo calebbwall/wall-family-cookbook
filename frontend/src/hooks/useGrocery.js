@@ -180,6 +180,7 @@ export function useGrocery() {
   const [groceryState, setGroceryState] = useState(DEFAULT_STATE)
   const [allRecipes, setAllRecipes] = useState([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [mergeStatus, setMergeStatus] = useState(null) // 'loading' | 'done' | 'error' | null
   const [mergedItems, setMergedItems] = useState(null)
   const mergedCacheKeyRef = useRef(null)
@@ -187,6 +188,7 @@ export function useGrocery() {
 
   const loadState = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const [state, recipes] = await Promise.all([
         api.getGroceryState(),
@@ -196,6 +198,7 @@ export function useGrocery() {
       setAllRecipes(recipes)
     } catch (e) {
       console.error('[grocery] load error:', e)
+      setError(e.message || 'Failed to load grocery data')
     } finally {
       setLoading(false)
     }
@@ -227,8 +230,12 @@ export function useGrocery() {
       setMergedItems(null)
       setMergeStatus(null)
       await save(newState)
-      const recipes = await api.getRecipesJson()
-      setAllRecipes(recipes)
+      try {
+        const recipes = await api.getRecipesJson()
+        setAllRecipes(recipes)
+      } catch (e) {
+        console.error('[grocery] failed to reload recipes:', e)
+      }
     }
     return added
   }, [groceryState, save])
@@ -324,6 +331,7 @@ export function useGrocery() {
     groceryState,
     allRecipes,
     loading,
+    error,
     computed,
     mergedItems,
     mergeStatus,

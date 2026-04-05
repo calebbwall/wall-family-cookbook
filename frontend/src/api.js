@@ -126,6 +126,21 @@ export async function mergeIngredients(ingredients) {
   })
 }
 
+// ── Recipe History ─────────────────────────────────────────────
+
+export async function getRecipeHistory(cardId) {
+  const data = await apiJson(`/api/recipe-history?card_id=${encodeURIComponent(cardId)}`)
+  return data.versions || []
+}
+
+export async function restoreRecipeVersion(versionId) {
+  return apiJson('/api/recipe-restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ versionId }),
+  })
+}
+
 // ── Auth & Export ──────────────────────────────────────────────
 
 export async function logout() {
