@@ -28,7 +28,6 @@ from flask import (
 # ── App & paths ────────────────────────────────────────────────────────────────
 
 BASE_DIR    = Path(__file__).parent
-DIST_DIR    = BASE_DIR / 'public' / 'dist'
 UPLOADS_DIR = BASE_DIR / 'public' / 'uploads'
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -81,11 +80,6 @@ def _cache_set(key: str, value: dict):
         for k in list(_extraction_cache.keys()):
             if _extraction_cache[k][0] < cutoff:
                 del _extraction_cache[k]
-
-# React SPA index.html — loaded once at startup (after build)
-_react_index = ''
-if DIST_DIR.exists() and (DIST_DIR / 'index.html').exists():
-    _react_index = (DIST_DIR / 'index.html').read_text(encoding='utf-8')
 
 # ── Database ───────────────────────────────────────────────────────────────────
 
@@ -1809,32 +1803,19 @@ Input ingredients:
         return jsonify(merged=fallback, warning=True)
 
 
-# ── Serve React SPA (catch-all for non-API, non-upload paths) ────────────────
-
-@app.route('/assets/<path:filename>')
-def serve_dist_assets(filename):
-    """Serve Vite-built JS/CSS bundles from public/dist/assets/."""
-    return send_from_directory(DIST_DIR / 'assets', filename)
+# ── Serve cookbook (catch-all for non-API, non-upload paths) ─────────────────
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
-def serve_react(path):
+def serve_cookbook(path):
     if path.startswith('api/') or path.startswith('uploads/'):
         return Response('Not found', 404)
-    # Auth check — show gate page when not logged in
+    # Show gate page when not logged in
     token = request.cookies.get(COOKIE_NAME, '')
     if token != VALID_TOKEN:
         return Response(build_gate_page(), mimetype='text/html')
-    # Serve the React SPA
-    global _react_index
-    if not _react_index:
-        # Reload in case build happened after startup
-        idx = DIST_DIR / 'index.html'
-        if idx.exists():
-            _react_index = idx.read_text(encoding='utf-8')
-        else:
-            return Response('React app not built. Run: cd frontend && npm run build', 500)
-    return Response(_react_index, mimetype='text/html')
+    # Serve the cookbook
+    return Response(build_page(), mimetype='text/html')
 
 
 # ── Startup helpers ─────────────────────────────────────────────────────────────
