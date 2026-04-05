@@ -443,6 +443,52 @@ def build_gate_page(error_msg=''):
 </body>
 </html>"""
 
+# ── Page builder ──────────────────────────────────────────────────────────────
+
+_INDEX_TEMPLATE = (BASE_DIR / 'public' / 'index.html').read_text(encoding='utf-8')
+
+def build_page():
+    """Render the full cookbook HTML by injecting recipe cards into the template."""
+    # Cache-busting versions from file mtimes
+    js_mtime  = int((BASE_DIR / 'public' / 'app.js').stat().st_mtime)
+    css_mtime = int((BASE_DIR / 'public' / 'style.css').stat().st_mtime)
+
+    # Fetch all recipes
+    with db_cursor() as cur:
+        cur.execute('SELECT * FROM recipes ORDER BY created_at ASC')
+        rows = cur.fetchall()
+
+    # Group card_html by section
+    sections: dict[str, list[str]] = {s: [] for s in
+        ['APPETIZERS', 'ENTREES', 'SIDES', 'SNACKS', 'BREAKFAST', 'DESSERTS']}
+    for r in rows:
+        section = SECTION_MAP.get(r['category'], 'ENTREES')
+        sections[section].append(r['card_html'])
+
+    html = _INDEX_TEMPLATE
+
+    # Inject cards between section markers
+    for section, cards in sections.items():
+        start = f'<!-- {section}_START -->'
+        end   = f'<!-- {section}_END -->'
+        joined = '\n'.join(cards)
+        html = html.replace(f'{start}\n  {end}', f'{start}\n{joined}\n  {end}', 1)
+        # Also update the recipe count badge
+        count = len(cards)
+        label = f'{count} recipe{"" if count == 1 else "s"}'
+        html = html.replace(
+            f'id="count-{section.lower()}">0 recipes',
+            f'id="count-{section.lower()}">{label}',
+            1
+        )
+
+    # Add cache-busting query strings to static assets
+    html = html.replace('href="/style.css"', f'href="/style.css?v={css_mtime}"', 1)
+    html = html.replace('src="/app.js"',     f'src="/app.js?v={js_mtime}"',     1)
+
+    return html
+
+
 # ── URL fetcher ────────────────────────────────────────────────────────────────
 
 def fetch_url_content(url):
@@ -1924,8 +1970,8 @@ def serve_cookbook(path):
     token = request.cookies.get(COOKIE_NAME, '')
     if token != VALID_TOKEN:
         return Response(build_gate_page(), mimetype='text/html')
-    # Serve the cookbook SPA
-    return app.send_static_file('index.html')
+    # Render the cookbook with recipe cards injected
+    return Response(build_page(), mimetype='text/html')
 
 
 # ── Startup helpers ─────────────────────────────────────────────────────────────
