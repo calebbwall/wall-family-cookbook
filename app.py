@@ -37,7 +37,10 @@ app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5 MB
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 PORT         = int(os.environ.get('PORT', 5000))
-PASSPHRASE   = os.environ.get('PASSPHRASE', 'Joe+Linda')
+PASSPHRASE   = os.environ.get('PASSPHRASE')
+if not PASSPHRASE:
+    print('[WARNING] PASSPHRASE env var not set — using development default "Joe+Linda"')
+    PASSPHRASE = 'Joe+Linda'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 GEMINI_KEY   = os.environ.get('GEMINI_API_KEY')
 
@@ -139,12 +142,28 @@ def ensure_table():
                 (name, order)
             )
 
+        # ── Household column on recipes (for "My Recipes" filtering) ──
+        cur.execute("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS household TEXT DEFAULT ''")
+
         # ── Grocery state table (per-household) ──────────────────────
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grocery_state (
                 household  TEXT PRIMARY KEY,
                 state_json TEXT NOT NULL DEFAULT '{}',
                 updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
+        # ── Recipe version history ───────────────────────────────────
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_versions (
+                id          SERIAL PRIMARY KEY,
+                card_id     TEXT NOT NULL,
+                recipe_json TEXT NOT NULL,
+                card_html   TEXT DEFAULT '',
+                edited_by   TEXT DEFAULT '',
+                edit_note   TEXT DEFAULT '',
+                created_at  TIMESTAMP DEFAULT NOW()
             )
         """)
 
@@ -197,8 +216,10 @@ def migrate_from_old_table():
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
 
+_AUTH_SALT = os.environ.get('AUTH_SALT', 'wfc-2026-apr-salt').encode('utf-8')
+
 def make_auth_token(passphrase):
-    return hmac.new(b'wfc-2026-apr-salt', passphrase.encode('utf-8'), hashlib.sha256).hexdigest()
+    return hmac.new(_AUTH_SALT, passphrase.encode('utf-8'), hashlib.sha256).hexdigest()
 
 VALID_TOKEN = make_auth_token(PASSPHRASE)
 
@@ -1081,7 +1102,7 @@ def login():
             COOKIE_NAME, VALID_TOKEN,
             max_age=COOKIE_MAX_AGE,
             httponly=True,
-            samesite='None',
+            samesite='Lax',
             secure=True,
             path='/'
         )
@@ -1089,7 +1110,7 @@ def login():
         resp.set_cookie(
             'wfc_household', household,
             max_age=COOKIE_MAX_AGE,
-            samesite='None',
+            samesite='Lax',
             secure=True,
             path='/'
         )
@@ -1122,8 +1143,8 @@ def add_household():
 @app.post('/api/logout')
 def logout():
     resp = make_response(jsonify(success=True))
-    resp.delete_cookie(COOKIE_NAME, path='/', samesite='None', secure=True)
-    resp.delete_cookie('wfc_household', path='/', samesite='None', secure=True)
+    resp.delete_cookie(COOKIE_NAME, path='/', samesite='Lax', secure=True)
+    resp.delete_cookie('wfc_household', path='/', samesite='Lax', secure=True)
     return resp
 
 
@@ -1152,6 +1173,7 @@ def list_recipes():
                 'cardId':    r['card_id'],
                 'category':  r['category'],
                 'author':    r.get('author_name', ''),
+                'household': r.get('household', ''),
                 'createdAt': r['created_at'].isoformat() if r.get('created_at') else None,
                 'recipeJson': rj,
                 'cardHtml':  r['card_html'] if not rj else None,
@@ -1339,10 +1361,10 @@ def add_recipe():
             with db_cursor() as cur:
                 cur.execute(
                     """INSERT INTO recipes (category, author_name, card_html, card_id,
-                                            recipe_json, source_type)
-                       VALUES (%s, %s, %s, %s, %s, %s)""",
+                                            recipe_json, source_type, household)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                     (category, author_name, card_html, card_id,
-                     json.dumps(recipe_json), source_type)
+                     json.dumps(recipe_json), source_type, get_current_household())
                 )
             return jsonify(success=True, cardId=card_id)
 
@@ -1389,9 +1411,9 @@ def add_recipe():
 
         with db_cursor() as cur:
             cur.execute(
-                """INSERT INTO recipes (category, author_name, card_html, card_id, source_type)
-                   VALUES (%s, %s, %s, %s, %s)""",
-                (category, author_name, card_html, card_id, source_type)
+                """INSERT INTO recipes (category, author_name, card_html, card_id, source_type, household)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (category, author_name, card_html, card_id, source_type, get_current_household())
             )
 
         return jsonify(success=True, cardId=card_id)
@@ -1446,6 +1468,13 @@ def edit_recipe():
                 new_rj = None
 
         with db_cursor() as cur:
+            # Save previous version for history
+            cur.execute(
+                'INSERT INTO recipe_versions (card_id, recipe_json, card_html, edited_by, edit_note) '
+                'VALUES (%s, %s, %s, %s, %s)',
+                (card_id, row.get('recipe_json', '{}'), row['card_html'],
+                 get_current_household(), edit_instructions.strip()[:200])
+            )
             if new_rj:
                 cur.execute(
                     'UPDATE recipes SET card_html = %s, recipe_json = %s WHERE card_id = %s',
@@ -1459,6 +1488,78 @@ def edit_recipe():
     except Exception as e:
         app.logger.error(f'[edit-recipe] {e}')
         return jsonify(error=str(e) or 'Something went wrong — please try again'), 500
+
+
+@app.get('/api/recipe-history')
+@require_auth
+def recipe_history():
+    """Return version history for a recipe."""
+    card_id = request.args.get('card_id', '')
+    if not card_id or not re.match(r'^card-[a-z0-9-]+$', card_id):
+        return jsonify(error='Invalid card ID'), 400
+    try:
+        with db_cursor() as cur:
+            cur.execute(
+                'SELECT id, recipe_json, edited_by, edit_note, created_at '
+                'FROM recipe_versions WHERE card_id = %s ORDER BY created_at DESC LIMIT 20',
+                (card_id,)
+            )
+            rows = cur.fetchall()
+        versions = []
+        for r in rows:
+            rj = None
+            if r.get('recipe_json'):
+                try:
+                    rj = json.loads(r['recipe_json'])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            versions.append({
+                'id': r['id'],
+                'recipeJson': rj,
+                'editedBy': r.get('edited_by', ''),
+                'editNote': r.get('edit_note', ''),
+                'createdAt': r['created_at'].isoformat() if r.get('created_at') else None,
+            })
+        return jsonify(versions=versions)
+    except Exception as e:
+        app.logger.error(f'[recipe-history] {e}')
+        return jsonify(error=str(e)), 500
+
+
+@app.post('/api/recipe-restore')
+@require_auth
+def recipe_restore():
+    """Restore a recipe to a previous version."""
+    data = request.get_json(force=True, silent=True) or {}
+    version_id = data.get('versionId')
+    if not version_id:
+        return jsonify(error='Missing versionId'), 400
+    try:
+        with db_cursor() as cur:
+            cur.execute('SELECT card_id, recipe_json, card_html FROM recipe_versions WHERE id = %s', (version_id,))
+            ver = cur.fetchone()
+            if not ver:
+                return jsonify(error='Version not found'), 404
+            card_id = ver['card_id']
+            # Save current state as a version before restoring
+            cur.execute('SELECT recipe_json, card_html FROM recipes WHERE card_id = %s', (card_id,))
+            current = cur.fetchone()
+            if current:
+                cur.execute(
+                    'INSERT INTO recipe_versions (card_id, recipe_json, card_html, edited_by, edit_note) '
+                    'VALUES (%s, %s, %s, %s, %s)',
+                    (card_id, current.get('recipe_json', '{}'), current['card_html'],
+                     get_current_household(), 'Before restore')
+                )
+            # Restore
+            cur.execute(
+                'UPDATE recipes SET recipe_json = %s, card_html = %s WHERE card_id = %s',
+                (ver['recipe_json'], ver.get('card_html', ''), card_id)
+            )
+        return jsonify(success=True, cardId=card_id)
+    except Exception as e:
+        app.logger.error(f'[recipe-restore] {e}')
+        return jsonify(error=str(e)), 500
 
 
 @app.get('/api/get-card-html')
@@ -1717,7 +1818,16 @@ def recipes_json():
                     'ingredients': rj.get('ingredients', []),
                 })
             else:
-                results.append(_parse_ingredients_from_html(r))
+                try:
+                    results.append(_parse_ingredients_from_html(r))
+                except Exception:
+                    results.append({
+                        'cardId': r['card_id'],
+                        'category': r.get('category', ''),
+                        'title': 'Recipe',
+                        'servings': '',
+                        'ingredients': [],
+                    })
         return jsonify(recipes=results)
     except Exception as e:
         app.logger.error(f'[recipes-json] {e}')

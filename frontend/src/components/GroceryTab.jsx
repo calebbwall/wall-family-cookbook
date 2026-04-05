@@ -7,7 +7,7 @@ export default function GroceryTab({ grocery, onClose }) {
     groceryState, allRecipes, computed, mergedItems, mergeStatus,
     runMerge, addRecipes, removeRecipe, changeServings, toggleCheck,
     addManualItem, removeManualItem, addToPantry, clearPantry, clearAll,
-    recipeCount,
+    recipeCount, loading, error, reload,
   } = grocery
 
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -74,9 +74,22 @@ export default function GroceryTab({ grocery, onClose }) {
         ))}
       </div>
 
+      {/* Loading / Error states */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--muted)' }}>
+          Loading grocery data…
+        </div>
+      )}
+      {error && (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--red)' }}>
+          <p>{error}</p>
+          <button className="grocery-btn" onClick={reload} style={{ marginTop: '0.5rem' }}>Retry</button>
+        </div>
+      )}
+
       {/* Grocery list */}
       <div id="grocery-list">
-        {Object.keys(displayItems).length === 0 ? (
+        {!loading && !error && Object.keys(displayItems).length === 0 ? (
           <div className="grocery-empty" style={{ textAlign: 'center', padding: '3rem', color: 'var(--muted)' }}>
             <div style={{ fontSize: '3rem', marginBottom: '0.5rem', opacity: 0.3 }}>🛒</div>
             <p style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.2rem', marginBottom: '0.3rem' }}>Your grocery list is empty</p>
