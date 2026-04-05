@@ -28,16 +28,12 @@ from flask import (
 # ── App & paths ────────────────────────────────────────────────────────────────
 
 BASE_DIR    = Path(__file__).parent
-HTML_PATH   = BASE_DIR / 'public' / 'index.html'
+DIST_DIR    = BASE_DIR / 'public' / 'dist'
 UPLOADS_DIR = BASE_DIR / 'public' / 'uploads'
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5 MB
-
-# Cache-busting version stamp — changes every deploy so browsers fetch fresh assets
-_JS_VER  = int((BASE_DIR / 'public' / 'app.js').stat().st_mtime)
-_CSS_VER = int((BASE_DIR / 'public' / 'style.css').stat().st_mtime)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -86,8 +82,10 @@ def _cache_set(key: str, value: dict):
             if _extraction_cache[k][0] < cutoff:
                 del _extraction_cache[k]
 
-# Load HTML template once at startup
-template_html = HTML_PATH.read_text(encoding='utf-8')
+# React SPA index.html — loaded once at startup (after build)
+_react_index = ''
+if DIST_DIR.exists() and (DIST_DIR / 'index.html').exists():
+    _react_index = (DIST_DIR / 'index.html').read_text(encoding='utf-8')
 
 # ── Database ───────────────────────────────────────────────────────────────────
 
@@ -199,71 +197,9 @@ def migrate_from_old_table():
         print(f'[migration] No old table to migrate from: {e}')
         return 0
 
-# ── Page builder ───────────────────────────────────────────────────────────────
-
-def build_page():
-    with db_cursor() as cur:
-        cur.execute('SELECT * FROM recipes ORDER BY created_at ASC')
-        rows = cur.fetchall()
-
-    total   = len(rows)
-    t_label = '1 recipe' if total == 1 else f'{total} recipes'
-    html    = (template_html
-               .replace('<title>Wall Family Cookbook</title>',
-                        f'<title>Wall Family Cookbook ({t_label})</title>')
-               .replace('href="/style.css"', f'href="/style.css?v={_CSS_VER}"')
-               .replace('src="/app.js"',     f'src="/app.js?v={_JS_VER}"'))
-
-    for section_key in SECTION_TO_CATEGORY:
-        section_cards = [r for r in rows if SECTION_MAP.get(r['category']) == section_key]
-        count         = len(section_cards)
-        count_label   = '1 recipe' if count == 1 else f'{count} recipes'
-        section_id    = section_key.lower()
-
-        injection = ''
-        if section_cards:
-            # Patch legacy cards: fix old onclick name and inject missing Cook Now buttons
-            fixed_htmls = []
-            for r in section_cards:
-                ch = r['card_html']
-                # Fix old function name saved in DB
-                ch = ch.replace('openCookNow(', 'openCookMode(')
-                # Add Cook Now button to old cards that have back-header but no cook-now-btn
-                if 'back-header' in ch and 'cook-now-btn' not in ch and 'back-flip-btn' in ch:
-                    card_id_m = re.search(r'<div class="flip-card" id="([^"]+)"', ch)
-                    cid = card_id_m.group(1) if card_id_m else ''
-                    cook_btn_html = (
-                        f'<button class="cook-now-btn" '
-                        f'onclick="event.stopPropagation();openCookMode('
-                        f'this.closest(\'.flip-card\').querySelector(\'.back-title\')?.textContent||\'\','
-                        f'\'{cid}\')" '
-                        f'title="Get AI help with this recipe">\U0001f373 Cook Now</button>'
-                    )
-                    # Insert right before the existing flip-back button
-                    ch = ch.replace('<button class="back-flip-btn"', cook_btn_html + '<button class="back-flip-btn"', 1)
-                fixed_htmls.append(ch)
-            cards_html = '\n    '.join(fixed_htmls)
-            injection  = f'\n  <div class="card-grid">\n    {cards_html}\n  </div>\n  '
-
-        html = re.sub(
-            rf'(<!-- {section_key}_START -->)[\s\S]*?(<!-- {section_key}_END -->)',
-            lambda m, inj=injection, sk=section_key: m.group(1) + inj + f'<!-- {sk}_END -->',
-            html
-        )
-
-        html = re.sub(
-            rf'(<span class="section-count" id="count-{section_id}">)[^<]*(</span>)',
-            rf'\g<1>{count_label}\g<2>',
-            html
-        )
-
-        if count > 0:
-            html = html.replace(
-                f'<div class="empty-state" id="empty-{section_id}">',
-                f'<div class="empty-state" id="empty-{section_id}" style="display:none">'
-            )
-
-    return html
+# ── Page builder (React SPA) ──────────────────────────────────────────────────
+# The legacy build_page() has been removed. Flask now serves the React SPA
+# from public/dist/index.html. All recipe rendering is handled client-side.
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
 
@@ -1233,15 +1169,6 @@ def list_recipes():
 
 # Legacy HTML index — kept as fallback when React build is not present.
 # The serve_react catch-all route handles / and /index.html now.
-# @app.get('/')
-# @app.get('/index.html')
-# @require_auth
-# def index():
-#     try:
-#         return Response(build_page(), mimetype='text/html')
-#     except Exception as e:
-#         app.logger.error(f'[page] {e}')
-#         return 'Error loading cookbook — please refresh', 500
 
 
 @app.post('/api/upload-media')
@@ -1881,7 +1808,12 @@ Input ingredients:
         return jsonify(merged=fallback, warning=True)
 
 
-# ── Serve cookbook (catch-all for non-API, non-upload paths) ──────────────────
+# ── Serve React SPA (catch-all for non-API, non-upload paths) ────────────────
+
+@app.route('/assets/<path:filename>')
+def serve_dist_assets(filename):
+    """Serve Vite-built JS/CSS bundles from public/dist/assets/."""
+    return send_from_directory(DIST_DIR / 'assets', filename)
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -1892,8 +1824,16 @@ def serve_react(path):
     token = request.cookies.get(COOKIE_NAME, '')
     if token != VALID_TOKEN:
         return Response(build_gate_page(), mimetype='text/html')
-    # Serve the legacy cookbook HTML
-    return Response(build_page(), mimetype='text/html')
+    # Serve the React SPA
+    global _react_index
+    if not _react_index:
+        # Reload in case build happened after startup
+        idx = DIST_DIR / 'index.html'
+        if idx.exists():
+            _react_index = idx.read_text(encoding='utf-8')
+        else:
+            return Response('React app not built. Run: cd frontend && npm run build', 500)
+    return Response(_react_index, mimetype='text/html')
 
 
 # ── Startup helpers ─────────────────────────────────────────────────────────────
