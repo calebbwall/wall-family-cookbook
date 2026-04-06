@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as api from '../api'
+import { showToast } from '../utils'
 
 const DEFAULT_STATE = {
   recipes: [],
@@ -213,6 +214,7 @@ export function useGrocery() {
       await api.saveGroceryState(newState)
     } catch (e) {
       console.error('[grocery] save error:', e)
+      showToast('Failed to save grocery changes — please try again')
     }
   }, [])
 

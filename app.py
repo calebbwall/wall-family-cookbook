@@ -1909,7 +1909,7 @@ Input ingredients:
     except Exception as e:
         app.logger.error(f'[merge-ingredients] {e}')
         # Graceful degradation: return original list unchanged
-        fallback = ingredients if 'ingredients' in dir() else []
+        fallback = ingredients if 'ingredients' in locals() else []
         return jsonify(merged=fallback, warning=True)
 
 
