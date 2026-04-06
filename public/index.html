@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wall Family Cookbook</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <a href="#top" class="nav-brand">Wall Family Cookbook</a>
+  <ul class="nav-links">
+    <li><a href="#appetizers">Appetizers</a></li>
+    <li><a href="#entrees">Entrées</a></li>
+    <li><a href="#sides">Sides</a></li>
+    <li><a href="#snacks">Snacks</a></li>
+    <li><a href="#breakfast">Breakfast</a></li>
+    <li><a href="#desserts">Desserts</a></li>
+  </ul>
+  <div class="nav-right">
+    <input class="nav-search" id="recipe-search" type="search"
+      placeholder="Search recipes…" aria-label="Search recipes" autocomplete="off">
+    <select class="sort-select" id="sort-select" onchange="sortRecipes(this.value)" title="Sort recipes">
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+      <option value="az">A → Z</option>
+      <option value="za">Z → A</option>
+    </select>
+    <button class="nav-grocery-btn" onclick="toggleGroceryTab()" id="nav-grocery-link">🛒 Groceries <span class="grocery-badge" id="grocery-badge" style="display:none">0</span></button>
+    <button class="nav-add-btn" onclick="openAddModal()">+ Add Recipe</button>
+  </div>
+</nav>
+
+<!-- Mobile-only scrollable category bar -->
+<nav class="mobile-nav-bar" aria-label="Jump to section">
+  <a href="#appetizers">🥗 Appetizers</a>
+  <a href="#entrees">🍽️ Entrées</a>
+  <a href="#sides">🥦 Sides</a>
+  <a href="#snacks">🍿 Snacks</a>
+  <a href="#breakfast">🍳 Breakfast</a>
+  <a href="#desserts">🍪 Desserts</a>
+</nav>
+
+<!-- Hero -->
+<header class="hero" id="top">
+  <div class="hero-content">
+    <p class="hero-eyebrow">A Family Recipe Collection</p>
+    <h1 class="hero-title">
+      Wall Family
+      <em>Cookbook</em>
+    </h1>
+    <div class="hero-rule"></div>
+    <p class="hero-tagline">
+      Recipes passed down, cooked with love, and always improving.<br>
+      Every dish tells a story worth sharing at the table.
+    </p>
+  </div>
+</header>
+
+<!-- Appetizers -->
+<section id="appetizers" class="section">
+  <div class="section-header">
+    <span class="section-icon">🥗</span>
+    <h2 class="section-title">Appetizers</h2>
+    <span class="section-count" id="count-appetizers">0 recipes</span>
+  </div>
+  <!-- APPETIZERS_START -->
+  <!-- APPETIZERS_END -->
+  <div class="empty-state" id="empty-appetizers">
+    <div class="empty-emoji">🥗</div>
+    <p class="empty-title">No appetizers yet</p>
+    <p class="empty-sub">Be the first to add a starter everyone will love.</p>
+    <button class="empty-cta-btn" onclick="openAddModal()">+ Add the first one</button>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Entrées -->
+<section id="entrees" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍽️</span>
+    <h2 class="section-title">Entrées</h2>
+    <span class="section-count" id="count-entrees">0 recipes</span>
+  </div>
+  <!-- ENTREES_START -->
+  <!-- ENTREES_END -->
+  <div class="empty-state" id="empty-entrees">
+    <div class="empty-emoji">🍽️</div>
+    <p class="empty-title">No entrées yet</p>
+    <p class="empty-sub">Add a main course that brings the whole family to the table.</p>
+    <button class="empty-cta-btn" onclick="openAddModal()">+ Add the first one</button>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Sides -->
+<section id="sides" class="section">
+  <div class="section-header">
+    <span class="section-icon">🥦</span>
+    <h2 class="section-title">Sides</h2>
+    <span class="section-count" id="count-sides">0 recipes</span>
+  </div>
+  <!-- SIDES_START -->
+  <!-- SIDES_END -->
+  <div class="empty-state" id="empty-sides">
+    <div class="empty-emoji">🥦</div>
+    <p class="empty-title">No sides yet</p>
+    <p class="empty-sub">The best meals always have a great side dish.</p>
+    <button class="empty-cta-btn" onclick="openAddModal()">+ Add the first one</button>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Snacks -->
+<section id="snacks" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍿</span>
+    <h2 class="section-title">Snacks</h2>
+    <span class="section-count" id="count-snacks">0 recipes</span>
+  </div>
+  <!-- SNACKS_START -->
+  <!-- SNACKS_END -->
+  <div class="empty-state" id="empty-snacks">
+    <div class="empty-emoji">🍿</div>
+    <p class="empty-title">No snacks yet</p>
+    <p class="empty-sub">Add a go-to snack for movie nights or quick bites.</p>
+    <button class="empty-cta-btn" onclick="openAddModal()">+ Add the first one</button>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Breakfast -->
+<section id="breakfast" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍳</span>
+    <h2 class="section-title">Breakfast</h2>
+    <span class="section-count" id="count-breakfast">0 recipes</span>
+  </div>
+  <!-- BREAKFAST_START -->
+  <!-- BREAKFAST_END -->
+  <div class="empty-state" id="empty-breakfast">
+    <div class="empty-emoji">🍳</div>
+    <p class="empty-title">No breakfast recipes yet</p>
+    <p class="empty-sub">Start the day right — add a morning favorite.</p>
+    <button class="empty-cta-btn" onclick="openAddModal()">+ Add the first one</button>
+  </div>
+</section>
+<div class="section-divider"></div>
+
+<!-- Desserts -->
+<section id="desserts" class="section">
+  <div class="section-header">
+    <span class="section-icon">🍪</span>
+    <h2 class="section-title">Desserts</h2>
+    <span class="section-count" id="count-desserts">0 recipes</span>
+  </div>
+  <!-- DESSERTS_START -->
+  <!-- DESSERTS_END -->
+  <div class="empty-state" id="empty-desserts">
+    <div class="empty-emoji">🍪</div>
+    <p class="empty-title">No desserts yet</p>
+    <p class="empty-sub">Every great cookbook ends on a sweet note.</p>
+    <button class="empty-cta-btn" onclick="openAddModal()">+ Add the first one</button>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <span id="household-label" style="display:inline-block;margin-bottom:0.5rem;font-size:0.82rem;color:var(--tan-dark);font-style:italic;"></span><br>
+  <strong>Wall Family Cookbook</strong>
+  Recipes passed down, cooked with love, and always improving.<br>
+  Hit <strong style="font-family:Lato,sans-serif;font-size:0.82rem;color:var(--tan-dark);display:inline">+ Add Recipe</strong> to share yours.
+  <br><br>
+  <a href="/api/export" download="recipes.json" style="color:var(--muted);font-size:0.75rem;text-decoration:none;opacity:0.6;">Export recipes</a>
+  &nbsp;&middot;&nbsp;
+  <a href="/api/logout" style="color:var(--muted);font-size:0.75rem;text-decoration:none;opacity:0.6;">Sign out</a>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════
+     GROCERY TAB — shown/hidden via toggleGroceryTab()
+     ═══════════════════════════════════════════════════════ -->
+<div id="grocery-tab" class="grocery-tab" style="display:none">
+  <div class="grocery-header">
+    <div class="grocery-header-top">
+      <h2 class="grocery-title">🛒 Grocery List</h2>
+      <button class="grocery-close-btn" onclick="toggleGroceryTab()" title="Back to recipes">&times;</button>
+    </div>
+    <div class="grocery-header-actions">
+      <button class="grocery-btn" onclick="openRecipePicker()">+ Add Recipes</button>
+      <button class="grocery-btn" onclick="openManualItemForm()">+ Custom Item</button>
+      <button class="grocery-btn" onclick="exportGroceryList()">📋 Copy List</button>
+      <button class="grocery-btn grocery-btn-danger" onclick="clearGroceryList()">Clear All</button>
+    </div>
+  </div>
+
+  <!-- Active recipes strip -->
+  <div class="grocery-recipes" id="grocery-recipes"></div>
+
+  <!-- Main grocery list -->
+  <div class="grocery-list" id="grocery-list">
+    <div class="grocery-empty" id="grocery-empty">
+      <div class="grocery-empty-icon">🛒</div>
+      <p class="grocery-empty-title">No items yet</p>
+      <p class="grocery-empty-sub">Add recipes to start building your grocery list.</p>
+      <button class="grocery-btn" onclick="openRecipePicker()" style="margin-top:1rem">+ Add Recipes</button>
+    </div>
+  </div>
+
+  <!-- Pantry section -->
+  <details class="grocery-pantry-section" id="grocery-pantry-section" style="display:none">
+    <summary class="grocery-pantry-summary">🏠 Pantry — items you already have</summary>
+    <div id="grocery-pantry" class="grocery-pantry-list"></div>
+    <div class="grocery-pantry-actions">
+      <button class="grocery-btn grocery-btn-sm" onclick="clearPantry()">Clear Pantry</button>
+    </div>
+  </details>
+</div>
+
+<!-- Recipe Picker Modal -->
+<div id="recipe-picker-modal" class="grocery-modal" style="display:none" onclick="if(event.target===this)closeRecipePicker()">
+  <div class="grocery-modal-card">
+    <div class="grocery-modal-header">
+      <h3>Select Recipes</h3>
+      <button class="grocery-close-btn" onclick="closeRecipePicker()">&times;</button>
+    </div>
+    <div class="grocery-modal-body" id="recipe-picker-body"></div>
+    <div class="grocery-modal-footer">
+      <button class="grocery-btn" onclick="applyRecipePicker()">Add Selected</button>
+      <button class="grocery-btn grocery-btn-outline" onclick="closeRecipePicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Item Modal -->
+<div id="manual-item-modal" class="grocery-modal" style="display:none" onclick="if(event.target===this)closeManualItemForm()">
+  <div class="grocery-modal-card" style="max-width:400px">
+    <div class="grocery-modal-header">
+      <h3>Add Custom Item</h3>
+      <button class="grocery-close-btn" onclick="closeManualItemForm()">&times;</button>
+    </div>
+    <div class="grocery-modal-body">
+      <label class="grocery-form-label">Item Name</label>
+      <input type="text" id="manual-item-name" class="grocery-form-input" placeholder="e.g. Paper towels" maxlength="60"/>
+      <label class="grocery-form-label">Quantity</label>
+      <input type="text" id="manual-item-qty" class="grocery-form-input" placeholder="e.g. 2" value="1"/>
+      <label class="grocery-form-label">Category</label>
+      <select id="manual-item-cat" class="grocery-form-input">
+        <option value="produce">Produce</option>
+        <option value="dairy">Dairy & Eggs</option>
+        <option value="meat">Meat & Seafood</option>
+        <option value="bakery">Bakery</option>
+        <option value="pantry" selected>Pantry</option>
+        <option value="spices">Spices & Seasonings</option>
+        <option value="frozen">Frozen</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="grocery-modal-footer">
+      <button class="grocery-btn" onclick="addManualItem()">Add Item</button>
+      <button class="grocery-btn grocery-btn-outline" onclick="closeManualItemForm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     ADD RECIPE MODAL — two-step: Compose → Review
+     ═══════════════════════════════════════════════════════ -->
+<div id="add-recipe-modal" onclick="if(event.target===this)closeAddModal()" role="dialog" aria-modal="true" aria-labelledby="add-modal-heading">
+  <div class="modal-box modal-box--wide">
+    <button class="modal-close" onclick="closeAddModal()" title="Close" aria-label="Close dialog">✕</button>
+
+    <!-- ── Step 1: Compose ─────────────────────────────── -->
+    <div id="add-step-compose">
+      <h2 class="modal-title" id="add-modal-heading">Add a Recipe</h2>
+      <p class="modal-sub">Paste text or a URL, upload a photo, or drop in an Instagram link.</p>
+
+      <!-- Mode selector -->
+      <div class="composer-modes" role="tablist" aria-label="Import method">
+        <button class="composer-mode active" data-mode="text"
+          role="tab" aria-selected="true" aria-controls="composer-pane-text"
+          onclick="selectComposerMode('text')">
+          <span aria-hidden="true">📋</span> Paste Text / URL
+        </button>
+        <button class="composer-mode" data-mode="photo"
+          role="tab" aria-selected="false" aria-controls="composer-pane-photo"
+          onclick="selectComposerMode('photo')">
+          <span aria-hidden="true">📸</span> Upload Photo
+        </button>
+        <button class="composer-mode" data-mode="instagram"
+          role="tab" aria-selected="false" aria-controls="composer-pane-instagram"
+          onclick="selectComposerMode('instagram')">
+          <span aria-hidden="true">📱</span> Instagram
+        </button>
+      </div>
+
+      <!-- Text / URL pane -->
+      <div id="composer-pane-text" class="composer-pane active" role="tabpanel">
+        <textarea id="composer-text-input" rows="7"
+          placeholder="Paste the full recipe here, or paste a URL to a recipe page…"
+          maxlength="20000"
+          oninput="handleComposerTextInput(this.value)"
+          aria-label="Recipe text or URL"></textarea>
+      </div>
+
+      <!-- Photo upload pane -->
+      <div id="composer-pane-photo" class="composer-pane" role="tabpanel">
+        <div id="photo-drop-zone" class="photo-drop-zone"
+          ondragover="event.preventDefault(); this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handlePhotoDrop(event)"
+          role="button" tabindex="0" aria-label="Drop zone for recipe photo"
+          onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('composer-photo-file').click()">
+          <div class="photo-drop-inner">
+            <span class="photo-drop-icon" aria-hidden="true">📸</span>
+            <p class="photo-drop-title">Drop a photo here</p>
+            <p class="photo-drop-sub">or use a button below</p>
+            <div class="photo-drop-actions">
+              <button type="button" class="photo-pick-btn"
+                onclick="document.getElementById('composer-photo-file').click()">
+                Choose File
+              </button>
+              <button type="button" class="photo-pick-btn"
+                onclick="document.getElementById('composer-photo-camera').click()">
+                📷 Camera
+              </button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="composer-photo-file" accept="image/*" style="display:none"
+          onchange="handleComposerPhotoFile(this)">
+        <input type="file" id="composer-photo-camera" accept="image/*" capture="environment"
+          style="display:none" onchange="handleComposerPhotoFile(this)">
+
+        <div id="composer-photo-preview" class="composer-photo-preview" style="display:none">
+          <img id="composer-photo-img" src="" alt="Recipe photo preview">
+          <button type="button" class="media-clear-btn"
+            onclick="clearComposerPhoto()" aria-label="Remove photo">✕</button>
+          <p id="composer-photo-meta" class="composer-photo-meta"></p>
+        </div>
+      </div>
+
+      <!-- Instagram pane -->
+      <div id="composer-pane-instagram" class="composer-pane" role="tabpanel">
+        <input type="url" id="composer-ig-url" class="ig-url-input"
+          placeholder="https://www.instagram.com/p/…"
+          aria-label="Instagram link"
+          oninput="handleIgUrlInput(this.value)">
+        <div id="ig-status" class="ig-status" style="display:none"></div>
+        <div id="ig-fallback" class="ig-fallback" style="display:none">
+          <p class="ig-fallback-msg">⚠️ Instagram didn't share post content — try one of these instead:</p>
+          <div class="ig-fallback-actions">
+            <button type="button" class="ig-fallback-btn" onclick="selectComposerMode('photo')">📸 Upload a photo</button>
+            <button type="button" class="ig-fallback-btn" onclick="selectComposerMode('text')">📋 Paste the recipe text</button>
+          </div>
+        </div>
+        <div id="ig-extracted" class="ig-extracted" style="display:none">
+          <p class="ig-extracted-label">✓ Found in post — will include in extraction:</p>
+          <p id="ig-extracted-text" class="ig-extracted-text"></p>
+        </div>
+      </div>
+
+      <!-- Category + Author row -->
+      <div class="composer-meta">
+        <div class="composer-meta-field">
+          <label class="modal-label" for="add-category">Category</label>
+          <select id="add-category" required aria-required="true">
+            <option value="">Choose…</option>
+            <option value="appetizer">Appetizer</option>
+            <option value="entree">Entrée</option>
+            <option value="side">Side Dish</option>
+            <option value="snack">Snack</option>
+            <option value="breakfast">Breakfast</option>
+            <option value="dessert">Dessert</option>
+          </select>
+        </div>
+        <div class="composer-meta-field">
+          <label class="modal-label" for="add-author">Your Name</label>
+          <input type="text" id="add-author" placeholder="e.g. Caleb"
+            maxlength="40" autocomplete="given-name" aria-required="true">
+        </div>
+      </div>
+
+      <button class="modal-submit" id="extract-btn" onclick="startExtraction()">
+        Extract Recipe →
+      </button>
+      <p id="compose-status" class="modal-status" aria-live="polite"></p>
+    </div><!-- /add-step-compose -->
+
+    <!-- ── Step 2: Review ──────────────────────────────── -->
+    <div id="add-step-review" style="display:none">
+      <div class="review-header">
+        <button class="review-back-btn" onclick="showComposeStep()" aria-label="Back to compose">
+          ← Back
+        </button>
+        <h2 class="modal-title">Review Recipe</h2>
+      </div>
+      <p class="modal-sub">Check the details below — edit anything before saving.</p>
+
+      <div id="review-confidence" class="review-confidence" aria-live="polite"></div>
+      <div id="review-warnings" class="review-warnings" style="display:none" role="alert"></div>
+
+      <div class="review-form">
+        <div class="review-row-2">
+          <div>
+            <label class="df-label" for="rv-emoji">Emoji</label>
+            <input id="rv-emoji" type="text" maxlength="8" placeholder="🍕">
+          </div>
+          <div>
+            <label class="df-label" for="rv-badge">Badge</label>
+            <input id="rv-badge" type="text" placeholder="Pizza · Italian">
+          </div>
+        </div>
+
+        <label class="df-label" for="rv-title">Title</label>
+        <input id="rv-title" type="text" placeholder="Recipe title" class="review-full-input">
+
+        <label class="df-label" for="rv-subtitle">Subtitle</label>
+        <input id="rv-subtitle" type="text" placeholder="Short description" class="review-full-input">
+
+        <div class="review-row-4">
+          <div>
+            <label class="df-label" for="rv-servings">Servings</label>
+            <input id="rv-servings" type="text" placeholder="4 servings">
+          </div>
+          <div>
+            <label class="df-label" for="rv-prep">Prep</label>
+            <input id="rv-prep" type="text" placeholder="15 min">
+          </div>
+          <div>
+            <label class="df-label" for="rv-cook">Cook</label>
+            <input id="rv-cook" type="text" placeholder="30 min">
+          </div>
+          <div>
+            <label class="df-label" for="rv-temp">Temp</label>
+            <input id="rv-temp" type="text" placeholder="375°F">
+          </div>
+        </div>
+
+        <div class="df-section">
+          <label class="df-label">Ingredients</label>
+          <div id="rv-ingredients"></div>
+          <button type="button" class="df-add-btn" onclick="rvAddIngredient('','')">+ Add ingredient</button>
+        </div>
+
+        <div class="df-section">
+          <label class="df-label">Steps</label>
+          <div id="rv-steps"></div>
+          <button type="button" class="df-add-btn" onclick="rvAddStep('','')">+ Add step</button>
+        </div>
+
+        <div class="df-section">
+          <label class="df-label">Calibration Notes <span style="font-weight:400;text-transform:none">(tips for tweaking)</span></label>
+          <div id="rv-notes"></div>
+          <button type="button" class="df-add-btn" onclick="rvAddNote('','')">+ Add note</button>
+        </div>
+
+        <div class="df-section">
+          <label class="df-label">Storage</label>
+          <div id="rv-storage"></div>
+          <button type="button" class="df-add-btn" onclick="rvAddStorage('','')">+ Add storage</button>
+        </div>
+
+        <div class="df-section">
+          <label class="df-label" for="rv-chefs-note">Chef's Note</label>
+          <textarea id="rv-chefs-note" placeholder="One key tip or secret…" rows="2"></textarea>
+        </div>
+      </div><!-- /review-form -->
+
+      <button class="modal-submit" id="review-save-btn" onclick="saveFromReview()">
+        Save to Cookbook
+      </button>
+      <p id="review-status" class="modal-status" aria-live="polite"></p>
+    </div><!-- /add-step-review -->
+
+  </div>
+</div><!-- /add-recipe-modal -->
+
+<!-- Edit Recipe Modal -->
+<div id="edit-recipe-modal" onclick="if(event.target===this)closeEditModal()" role="dialog" aria-modal="true" aria-labelledby="edit-modal-heading">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeEditModal()" title="Close" aria-label="Close dialog">✕</button>
+    <h2 class="modal-title" id="edit-modal-heading">Edit Recipe</h2>
+    <input type="hidden" id="edit-card-id" value="">
+
+    <div class="edit-tabs" role="tablist">
+      <button class="edit-tab active" onclick="switchEditTab('ai')" data-tab="ai" role="tab" aria-selected="true">AI Edit</button>
+      <button class="edit-tab" onclick="switchEditTab('direct')" data-tab="direct" role="tab" aria-selected="false">Direct Edit</button>
+      <button class="edit-tab edit-tab-delete" onclick="switchEditTab('delete')" data-tab="delete" role="tab" aria-selected="false">Delete</button>
+    </div>
+
+    <div id="edit-pane-ai" class="edit-pane active" role="tabpanel">
+      <p class="modal-sub">Describe what to change — AI will regenerate the card.</p>
+      <form onsubmit="submitAiEdit(event)">
+        <label class="modal-label" for="edit-instructions">What to Change</label>
+        <textarea id="edit-instructions" rows="4" maxlength="500" required
+          placeholder="e.g. Change the baking temp to 375°F and add a note about using orange blossom honey…"></textarea>
+        <button type="submit" class="modal-submit" id="ai-edit-btn">Update with AI</button>
+      </form>
+    </div>
+
+    <div id="edit-pane-direct" class="edit-pane" role="tabpanel">
+      <textarea id="direct-edit-html" spellcheck="false" style="display:none"></textarea>
+
+      <div class="df-section">
+        <div class="df-row-2">
+          <div><label class="df-label">Emoji</label><input id="df-emoji" type="text" maxlength="8" placeholder="🍕"></div>
+          <div><label class="df-label">Badge</label><input id="df-badge" type="text" placeholder="Pizza · Italian"></div>
+        </div>
+        <div style="margin-top:0.6rem">
+          <label class="df-label">Photo (optional)</label>
+          <div class="media-input-row">
+            <button type="button" class="media-upload-btn" onclick="document.getElementById('df-photo-file').click()">📷 Upload</button>
+            <input type="text" id="df-media-url" placeholder="or paste image / Instagram URL…" style="flex:1;min-width:0" oninput="handleDfMediaUrl(this.value)">
+          </div>
+          <input type="file" id="df-photo-file" accept="image/*" style="display:none" onchange="handleDfPhotoFile(this)">
+          <div class="media-preview-wrap" id="df-media-preview">
+            <img class="media-preview-img" id="df-media-preview-img" src="" alt="">
+            <div class="media-preview-instagram" id="df-media-preview-ig">📷 Instagram link</div>
+            <button type="button" class="media-clear-btn" onclick="clearDfMedia()" title="Remove">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Title</label>
+        <input id="df-title" type="text" placeholder="Recipe title">
+      </div>
+      <div class="df-section">
+        <label class="df-label">Subtitle</label>
+        <input id="df-sub" type="text" placeholder="Short subtitle or source">
+      </div>
+      <div class="df-section">
+        <label class="df-label">Info chips (4 small tags on the front)</label>
+        <div class="df-chips-grid">
+          <input id="df-chip-0" type="text" placeholder="e.g. 8 servings">
+          <input id="df-chip-1" type="text" placeholder="e.g. 425°F">
+          <input id="df-chip-2" type="text" placeholder="e.g. 45 min">
+          <input id="df-chip-3" type="text" placeholder="e.g. Crispy">
+        </div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Stats (3 boxes on the back)</label>
+        <div id="df-stats"></div>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Ingredients</label>
+        <div id="df-ingredients"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddIngredient('','')">+ Add ingredient</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Steps</label>
+        <div id="df-steps"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddStep('','')">+ Add step</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Calibration notes <span style="font-weight:400;text-transform:none">(tips for tweaking the recipe)</span></label>
+        <div id="df-notes"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddNote('','')">+ Add note</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Storage</label>
+        <div id="df-storage"></div>
+        <button type="button" class="df-add-btn" onclick="dfAddStorage('','')">+ Add storage option</button>
+      </div>
+      <div class="df-section">
+        <label class="df-label">Chef's note</label>
+        <textarea id="df-chefs-note" placeholder="One key tip or secret…"></textarea>
+      </div>
+
+      <button class="modal-submit" onclick="submitDirectEdit()" id="direct-edit-btn">Save Changes</button>
+    </div>
+
+    <div id="edit-pane-delete" class="edit-pane" role="tabpanel">
+      <div class="delete-warning">
+        <p>You are about to permanently delete:</p>
+        <p class="delete-recipe-name" id="delete-recipe-name"></p>
+        <p style="margin-top:0.6rem;font-size:0.82rem;color:#b91c1c;">This cannot be undone.</p>
+      </div>
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;font-size:0.88rem;color:#991b1b;cursor:pointer;">
+        <input type="checkbox" id="delete-confirm-check" onchange="document.getElementById('delete-btn').disabled=!this.checked">
+        Yes, I want to delete this recipe
+      </label>
+      <button class="delete-confirm-btn" onclick="submitDelete()" id="delete-btn" disabled>Delete Recipe</button>
+    </div>
+
+    <p id="edit-modal-status" aria-live="polite"></p>
+  </div>
+</div>
+
+<!-- Cook Mode Overlay -->
+<div id="cook-mode-overlay" class="cook-mode-overlay" onclick="if(event.target===this)closeCookMode()" role="dialog" aria-modal="true" aria-labelledby="cook-mode-title">
+  <div class="cook-mode-panel">
+    <div class="cook-mode-header">
+      <h2 class="cook-mode-title" id="cook-mode-title">🍳 Cooking Mode</h2>
+      <div class="cook-mode-actions">
+        <button class="cook-mode-ask-ai" onclick="openCookModeChat()" aria-label="Ask AI about this recipe">💬 Ask AI</button>
+        <button class="cook-mode-close" onclick="closeCookMode()" aria-label="Exit cooking mode">✕ Exit</button>
+      </div>
+    </div>
+    <div class="cook-mode-body" id="cook-mode-body"></div>
+  </div>
+</div>
+
+<!-- Step Zoom Overlay -->
+<div id="step-zoom-overlay" class="step-zoom-overlay" onclick="if(event.target===this)closeStepZoom()" role="dialog" aria-modal="true" aria-labelledby="step-zoom-label">
+  <div class="step-zoom-panel">
+    <div class="step-zoom-header">
+      <span class="step-zoom-label" id="step-zoom-label">Step <span id="step-zoom-num">1</span> of <span id="step-zoom-total">1</span></span>
+      <button class="step-zoom-close" onclick="closeStepZoom()" aria-label="Close step view">✕</button>
+    </div>
+    <div class="step-zoom-body">
+      <div class="step-zoom-number" id="step-zoom-circle">1</div>
+      <div class="step-zoom-text" id="step-zoom-text"></div>
+      <div class="step-zoom-timer" id="step-zoom-timer" style="display:none">
+        <span class="step-zoom-timer-display" id="step-zoom-timer-display">0:00</span>
+        <button class="step-zoom-timer-btn" id="step-zoom-timer-btn" onclick="toggleStepZoomTimer()">▶ Start</button>
+        <button class="step-zoom-timer-reset" onclick="resetStepZoomTimer()">↺ Reset</button>
+      </div>
+    </div>
+    <div class="step-zoom-nav">
+      <button class="step-zoom-prev" onclick="stepZoomNav(-1)" aria-label="Previous step">← Prev</button>
+      <button class="step-zoom-next" onclick="stepZoomNav(1)" aria-label="Next step">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile-only bottom grocery bar -->
+<div class="mobile-grocery-bar" id="mobile-grocery-bar">
+  <button onclick="toggleGroceryTab()">🛒 Groceries <span class="grocery-badge-mobile" id="grocery-badge-mobile" style="display:none">0</span></button>
+</div>
+
+<!-- Chat FAB -->
+<button class="chat-fab" onclick="toggleChat()" title="Chat about recipes" aria-label="Open recipe assistant">💬</button>
+
+<!-- Chat Panel -->
+<div class="chat-panel" id="chat-panel" role="complementary" aria-label="Recipe assistant">
+  <div class="chat-panel-header">
+    <span class="chat-panel-title">📖 Recipe Assistant</span>
+    <button class="chat-panel-close" onclick="toggleChat()" title="Close" aria-label="Close chat">✕</button>
+  </div>
+  <div id="chat-recipe-context-bar" class="chat-recipe-context-bar" style="display:none">
+    <span id="chat-recipe-context-label">Discussing: <strong id="chat-recipe-name"></strong></span>
+    <button onclick="clearChatRecipeContext()" title="Remove focus" aria-label="Clear recipe focus">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg chat-msg-assistant">
+      Hi! Ask me anything about our cookbook — what to make tonight, substitutions, techniques, or any recipe questions. Flip a card and hit <strong>Cook Now</strong> to get focused help with a specific recipe.
+    </div>
+  </div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chat-input" placeholder="Ask about a recipe…" rows="1" maxlength="500"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
+      aria-label="Chat message"></textarea>
+    <button class="chat-send-btn" id="chat-send-btn" onclick="sendChat()" title="Send" aria-label="Send message">➤</button>
+  </div>
+</div>
+
+<!-- Back-to-top button -->
+<button id="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="/app.js" defer></script>
+</body>
+</html>

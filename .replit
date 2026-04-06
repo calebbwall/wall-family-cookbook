@@ -35,5 +35,5 @@ externalPort = 80
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "pip install -r requirements.txt && gunicorn --bind=0.0.0.0:5000 app:app"]
+run = ["gunicorn", "--bind=0.0.0.0:5000", "app:app"]
 build = ["bash", "-c", "pip install -r requirements.txt && cd frontend && npm install && npm run build"]
