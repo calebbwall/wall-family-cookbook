@@ -85,21 +85,55 @@ def _cache_set(key: str, value: dict):
                 del _extraction_cache[k]
 
 # ── Database ───────────────────────────────────────────────────────────────────
+# Uses keepalives so the OS pings idle connections and prevents silent drops.
+# db_cursor() validates the connection before use and auto-reconnects if stale.
 
-db_pool = psycopg2.pool.ThreadedConnectionPool(1, 10, dsn=DATABASE_URL)
+_DB_CONNECT_KWARGS = dict(
+    dsn=DATABASE_URL,
+    keepalives=1,
+    keepalives_idle=30,
+    keepalives_interval=10,
+    keepalives_count=5,
+)
+
+db_pool = psycopg2.pool.ThreadedConnectionPool(1, 10, **_DB_CONNECT_KWARGS)
+
+def _get_conn():
+    """Get a live connection from the pool, replacing any stale ones."""
+    conn = db_pool.getconn()
+    # Ping to check the connection is still alive.
+    # If it's stale, discard it and open a fresh one.
+    try:
+        conn.cursor().execute('SELECT 1')
+        conn.rollback()  # don't leave an open transaction
+        return conn
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        try:
+            db_pool.putconn(conn, close=True)
+        except Exception:
+            pass
+        # Pool will create a fresh connection to replace the one we closed.
+        return db_pool.getconn()
 
 @contextmanager
 def db_cursor():
-    conn = db_pool.getconn()
+    """Context manager that yields a RealDictCursor with auto-reconnect."""
+    conn = _get_conn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             yield cur
         conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
-        db_pool.putconn(conn)
+        try:
+            db_pool.putconn(conn)
+        except Exception:
+            pass
 
 
 def ensure_table():
