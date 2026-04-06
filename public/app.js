@@ -1969,11 +1969,13 @@ async function _doRenderGroceryTab() {
       .then(data => {
         if (data.warning) {
           _setMergeIndicator('error');
-        } else {
+        } else if (data.merged && data.merged.length > 0) {
           _mergedCache = data.merged;
           _mergedCacheKey = cacheKey;
           _renderMergedGroceryItems(data.merged);
           _setMergeIndicator('done');
+        } else {
+          _setMergeIndicator('error');
         }
       })
       .catch(() => { _setMergeIndicator('error'); });
@@ -2006,6 +2008,7 @@ function _setMergeIndicator(state) {
 }
 
 function _renderMergedGroceryItems(mergedItems) {
+  if (!mergedItems || mergedItems.length === 0) return;
   // Re-group merged items by category
   const grouped = {};
   for (const item of mergedItems) {
@@ -2036,18 +2039,23 @@ function _renderMergedGroceryItems(mergedItems) {
 
 function _renderGroceryItems(computed) {
   const listEl = document.getElementById('grocery-list');
-  const emptyEl = document.getElementById('grocery-empty');
   const hasItems = Object.keys(computed).length > 0;
 
-  if (!hasItems) {
-    listEl.innerHTML = '';
-    listEl.appendChild(emptyEl);
-    emptyEl.style.display = '';
-  } else {
-    listEl.innerHTML = '';
-    emptyEl.style.display = 'none';
+  listEl.innerHTML = '';
 
-    for (const [cat, items] of Object.entries(computed)) {
+  if (!hasItems) {
+    listEl.innerHTML = `
+      <div class="grocery-empty" id="grocery-empty">
+        <div class="grocery-empty-icon">🛒</div>
+        <p class="grocery-empty-title">No items yet</p>
+        <p class="grocery-empty-sub">Add recipes to start building your grocery list.</p>
+        <button class="grocery-btn" onclick="openRecipePicker()" style="margin-top:1rem">+ Add Recipes</button>
+      </div>
+    `;
+    return;
+  }
+
+  for (const [cat, items] of Object.entries(computed)) {
       const meta = _CAT_META[cat] || _CAT_META.other;
       const section = document.createElement('details');
       section.className = 'grocery-category';
@@ -2093,7 +2101,6 @@ function _renderGroceryItems(computed) {
       section.appendChild(itemsDiv);
       listEl.appendChild(section);
     }
-  }
 }
 
 function _renderPantry() {
