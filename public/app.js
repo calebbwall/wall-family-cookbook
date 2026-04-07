@@ -272,7 +272,7 @@ function _normalizeIngName(name) {
 
 // ── Ingredient category classification ──────────────────────────
 const _ING_CATEGORIES = {
-  produce: ['onion','garlic','tomato','potato','carrot','celery','pepper','bell pepper',
+  produce: ['onion','garlic','tomato','potato','carrot','celery','bell pepper',
     'lettuce','spinach','broccoli','mushroom','lemon','lime','avocado','cilantro',
     'parsley','basil','ginger','jalape','scallion','shallot','zucchini','squash',
     'corn','green bean','pea','apple','banana','berry','strawberr','blueberr',
@@ -309,18 +309,24 @@ const _ING_CATEGORIES = {
     'smoked paprika','garlic powder','onion powder','italian seasoning',
     'everything bagel','old bay','taco seasoning','ranch seasoning',
     'chili flake','red pepper flake','white pepper','star anise','saffron',
-    'sumac','za\'atar'],
+    'sumac','za\'atar','pepper'],
   frozen: ['frozen'],
   other: [],
 };
 
+// Build a flat lookup sorted longest-first so specific keywords match before generic ones
+// e.g. "black pepper" (spices) matches before "pepper" (spices), "bell pepper" before generic
+const _ING_LOOKUP = [];
+for (const [cat, keywords] of Object.entries(_ING_CATEGORIES)) {
+  if (cat === 'other') continue;
+  for (const kw of keywords) _ING_LOOKUP.push([kw, cat]);
+}
+_ING_LOOKUP.sort((a, b) => b[0].length - a[0].length);
+
 function _categorizeIngredient(name) {
   const n = name.toLowerCase();
-  for (const [cat, keywords] of Object.entries(_ING_CATEGORIES)) {
-    if (cat === 'other') continue;
-    for (const kw of keywords) {
-      if (n.includes(kw)) return cat;
-    }
+  for (const [kw, cat] of _ING_LOOKUP) {
+    if (n.includes(kw)) return cat;
   }
   return 'other';
 }
@@ -1967,18 +1973,17 @@ async function _doRenderGroceryTab() {
       })
       .then(r => r.json())
       .then(data => {
-        if (data.warning) {
-          _setMergeIndicator('error');
-        } else if (data.merged && data.merged.length > 0) {
+        if (!data.warning && data.merged && data.merged.length > 0) {
           _mergedCache = data.merged;
           _mergedCacheKey = cacheKey;
           _renderMergedGroceryItems(data.merged);
           _setMergeIndicator('done');
         } else {
-          _setMergeIndicator('error');
+          // AI merge failed — keep showing unmerged items (already rendered)
+          _setMergeIndicator('unmerged');
         }
       })
-      .catch(() => { _setMergeIndicator('error'); });
+      .catch(() => { _setMergeIndicator('unmerged'); });
     }
   }
 
@@ -2001,8 +2006,8 @@ function _setMergeIndicator(state) {
   } else if (state === 'done') {
     el.textContent = '✓ AI-merged';
     el.style.color = 'var(--green, #2a7d2a)';
-  } else if (state === 'error') {
-    el.textContent = 'Smart merge unavailable';
+  } else if (state === 'error' || state === 'unmerged') {
+    el.textContent = '';
     el.style.color = 'var(--muted)';
   }
 }
