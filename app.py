@@ -1879,7 +1879,7 @@ def recipes_json():
     """Return all recipes with structured ingredient data for the grocery system."""
     try:
         with db_cursor() as cur:
-            cur.execute('SELECT card_id, category, recipe_json, card_html FROM recipes ORDER BY created_at ASC')
+            cur.execute('SELECT card_id, category, author_name, recipe_json, card_html FROM recipes ORDER BY created_at ASC')
             rows = cur.fetchall()
         results = []
         for r in rows:
@@ -1893,17 +1893,21 @@ def recipes_json():
                 results.append({
                     'cardId': r['card_id'],
                     'category': r['category'],
+                    'author': r.get('author_name', ''),
                     'title': rj.get('title', 'Recipe'),
                     'servings': rj.get('servings', ''),
                     'ingredients': rj.get('ingredients', []),
                 })
             else:
                 try:
-                    results.append(_parse_ingredients_from_html(r))
+                    parsed = _parse_ingredients_from_html(r)
+                    parsed['author'] = r.get('author_name', '')
+                    results.append(parsed)
                 except Exception:
                     results.append({
                         'cardId': r['card_id'],
                         'category': r.get('category', ''),
+                        'author': r.get('author_name', ''),
                         'title': 'Recipe',
                         'servings': '',
                         'ingredients': [],

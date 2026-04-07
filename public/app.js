@@ -2161,19 +2161,88 @@ function changeGroceryServings(cardId, delta) {
 }
 
 // ── Recipe picker ───────────────────────────────────────────────
+function _hideChatFab() {
+  document.querySelector('.chat-fab')?.classList.add('chat-fab-hidden');
+}
+function _showChatFab() {
+  document.querySelector('.chat-fab')?.classList.remove('chat-fab-hidden');
+}
+
+function _filterPickerItems() {
+  const searchEl = document.getElementById('recipe-picker-search-input');
+  const authorEl = document.getElementById('recipe-picker-author-filter');
+  const q = (searchEl?.value || '').toLowerCase();
+  const authorFilter = authorEl?.value || '';
+  const activeCat = document.querySelector('.recipe-picker-filter-btn.active');
+  const catFilter = activeCat?.dataset.category || '';
+
+  document.querySelectorAll('.recipe-picker-item').forEach(item => {
+    const title = (item.dataset.title || '').toLowerCase();
+    const author = item.dataset.author || '';
+    const cat = item.dataset.category || '';
+    const matchSearch = !q || title.includes(q) || author.toLowerCase().includes(q);
+    const matchCat = !catFilter || cat === catFilter;
+    const matchAuthor = !authorFilter || author === authorFilter;
+    item.style.display = (matchSearch && matchCat && matchAuthor) ? '' : 'none';
+  });
+}
+
+const _PICKER_CAT_LABELS = {
+  appetizer: 'Appetizers', entree: 'Entrees', side: 'Sides',
+  snack: 'Snacks', breakfast: 'Breakfast', dessert: 'Desserts',
+};
+
 async function openRecipePicker() {
   const allRecipes = await _fetchAllRecipes();
   const body = document.getElementById('recipe-picker-body');
   body.innerHTML = '';
   const existing = new Set((_groceryState.recipes || []).map(r => r.cardId));
 
+  // Search bar
+  const searchDiv = document.createElement('div');
+  searchDiv.className = 'recipe-picker-search';
+  searchDiv.innerHTML = `<input type="text" id="recipe-picker-search-input" class="grocery-form-input" placeholder="Search recipes...">`;
+  body.appendChild(searchDiv);
+
+  // Category filter pills
+  const cats = new Set();
+  const authors = new Set();
+  for (const r of allRecipes) {
+    if (r.category) cats.add(r.category);
+    if (r.author) authors.add(r.author);
+  }
+  const filterDiv = document.createElement('div');
+  filterDiv.className = 'recipe-picker-filters';
+  filterDiv.innerHTML = `<button class="recipe-picker-filter-btn active" data-category="">All</button>` +
+    [...cats].sort().map(c => `<button class="recipe-picker-filter-btn" data-category="${_escAttr(c)}">${_escHtml(_PICKER_CAT_LABELS[c] || c)}</button>`).join('');
+  body.appendChild(filterDiv);
+
+  // Author filter (only if multiple authors)
+  if (authors.size > 1) {
+    const authorDiv = document.createElement('div');
+    authorDiv.style.marginBottom = '0.75rem';
+    authorDiv.innerHTML = `<select id="recipe-picker-author-filter" class="recipe-picker-author-filter">
+      <option value="">All authors</option>
+      ${[...authors].sort().map(a => `<option value="${_escAttr(a)}">${_escHtml(a)}</option>`).join('')}
+    </select>`;
+    body.appendChild(authorDiv);
+  }
+
+  // Recipe items
   for (const r of allRecipes) {
     const baseServ = _parseServingsNum(r.servings) || 1;
     const div = document.createElement('div');
     div.className = 'recipe-picker-item';
+    div.dataset.title = r.title || '';
+    div.dataset.category = r.category || '';
+    div.dataset.author = r.author || '';
+    const authorLabel = r.author ? `<span class="recipe-picker-author">by ${_escHtml(r.author)}</span>` : '';
     div.innerHTML = `
       <input type="checkbox" class="recipe-picker-check" data-card-id="${r.cardId}" ${existing.has(r.cardId) ? 'checked disabled' : ''}>
-      <span class="recipe-picker-title">${_escHtml(r.title)}</span>
+      <span class="recipe-picker-info">
+        <span class="recipe-picker-title">${_escHtml(r.title)}</span>
+        ${authorLabel}
+      </span>
       <span class="recipe-picker-servings">
         <span>Servings:</span>
         <input type="number" class="recipe-picker-serv-input" data-card-id="${r.cardId}" value="${baseServ}" min="1" max="50">
@@ -2181,11 +2250,29 @@ async function openRecipePicker() {
     `;
     body.appendChild(div);
   }
+
+  // Wire up search
+  document.getElementById('recipe-picker-search-input').addEventListener('input', _filterPickerItems);
+
+  // Wire up category pills
+  filterDiv.addEventListener('click', e => {
+    const btn = e.target.closest('.recipe-picker-filter-btn');
+    if (!btn) return;
+    filterDiv.querySelectorAll('.recipe-picker-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _filterPickerItems();
+  });
+
+  // Wire up author filter
+  document.getElementById('recipe-picker-author-filter')?.addEventListener('change', _filterPickerItems);
+
+  _hideChatFab();
   document.getElementById('recipe-picker-modal').style.display = 'flex';
 }
 
 function closeRecipePicker() {
   document.getElementById('recipe-picker-modal').style.display = 'none';
+  _showChatFab();
 }
 
 async function applyRecipePicker() {
@@ -2221,10 +2308,12 @@ function openManualItemForm() {
   document.getElementById('manual-item-name').value = '';
   document.getElementById('manual-item-qty').value = '1';
   document.getElementById('manual-item-cat').value = 'pantry';
+  _hideChatFab();
   document.getElementById('manual-item-modal').style.display = 'flex';
 }
 function closeManualItemForm() {
   document.getElementById('manual-item-modal').style.display = 'none';
+  _showChatFab();
 }
 
 function addManualItem() {
