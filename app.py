@@ -479,7 +479,7 @@ def build_gate_page(error_msg=''):
 
 # ── Page builder ──────────────────────────────────────────────────────────────
 
-_INDEX_TEMPLATE = (BASE_DIR / 'public' / 'index.html').read_text(encoding='utf-8')
+_INDEX_TEMPLATE = (BASE_DIR / 'templates' / 'index.html').read_text(encoding='utf-8')
 
 def build_page():
     """Render the full cookbook HTML by injecting recipe cards into the template."""
