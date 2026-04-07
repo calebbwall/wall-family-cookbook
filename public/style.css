@@ -1440,6 +1440,7 @@ footer strong {
   transition: background 0.2s, transform 0.2s;
 }
 .chat-fab:hover { background: var(--red-light); transform: scale(1.07); }
+.chat-fab-hidden { display: none !important; }
 
 /* ── Chat Panel ───────────────────────────────────────────────── */
 .chat-panel {
@@ -2193,6 +2194,10 @@ footer strong {
   cursor: pointer;
   font-weight: 600;
   font-size: 0.95rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--white);
   color: var(--dark);
   list-style: none;
   user-select: none;
@@ -2436,11 +2441,13 @@ footer strong {
   .hero-title { font-size: clamp(2.4rem, 12vw, 4rem); line-height: 1; }
   .card-grid { gap: 0.75rem; }
 
-  .grocery-tab { padding: 1rem 0.75rem; }
+  .grocery-tab { padding: 1rem 0.75rem 7rem; }
   .grocery-header-actions { gap: 0.35rem; }
   .grocery-btn { padding: 0.45rem 0.7rem; font-size: 0.78rem; }
-  .grocery-item { font-size: 0.85rem; gap: 0.35rem; }
+  .grocery-item { font-size: 0.85rem; gap: 0.35rem; padding: 0.6rem 0.35rem; }
   .grocery-item-sources { display: none; }
+  .grocery-item-action-btn { padding: 0.4rem 0.5rem; font-size: 1rem; min-width: 36px; min-height: 36px; }
+  .recipe-picker-item { padding: 0.85rem 0; }
   .grocery-modal-card { max-height: 90vh; }
   .nav-grocery-btn { display: none; }
   .mobile-grocery-bar {
@@ -2473,6 +2480,66 @@ footer strong {
   body.grocery-open .chat-fab { bottom: 5rem; }
   body.grocery-open #back-to-top { bottom: 8.5rem; }
 }
+
+/* ── Recipe picker search & filters ───────────────────────────── */
+.recipe-picker-search { margin-bottom: 0.5rem; }
+.recipe-picker-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+.recipe-picker-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: var(--red);
+  border: 1.5px solid var(--red);
+  padding: 0.3rem 0.65rem;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Lato', sans-serif;
+  transition: background 0.15s, color 0.15s;
+}
+.recipe-picker-filter-btn:hover { background: var(--red-faint, rgba(139,26,26,0.08)); }
+.recipe-picker-filter-btn.active {
+  background: var(--red);
+  color: var(--white);
+  border-color: var(--red);
+}
+.recipe-picker-author {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+}
+.recipe-picker-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.recipe-picker-author-filter {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tan-dark);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--dark);
+  font-family: 'Lato', sans-serif;
+}
+.grocery-back-btn {
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--red);
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  font-family: 'Lato', sans-serif;
+}
+.grocery-back-btn:hover { text-decoration: underline; }
 
 /* ── Desktop: multi-column card grid ─────────────────────────── */
 @media (min-width: 900px) {
