@@ -2473,3 +2473,12 @@ footer strong {
   body.grocery-open .chat-fab { bottom: 5rem; }
   body.grocery-open #back-to-top { bottom: 8.5rem; }
 }
+
+/* ── Desktop: multi-column card grid ─────────────────────────── */
+@media (min-width: 900px) {
+  .card-grid { grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+  .flip-card { height: 420px; }
+}
+@media (min-width: 1400px) {
+  .card-grid { grid-template-columns: repeat(3, 1fr); }
+}

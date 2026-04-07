@@ -1982,12 +1982,19 @@ Input ingredients:
             [{'role': 'user', 'parts': [{'text': prompt}]}],
             gen_config=gen_cfg
         )
-        merged = json.loads(result_text)
+        # Strip markdown code fences if present (common Gemini issue)
+        cleaned = result_text.strip()
+        if cleaned.startswith('```'):
+            cleaned = cleaned.split('\n', 1)[-1]  # remove first line
+            if cleaned.endswith('```'):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+        merged = json.loads(cleaned)
         if not isinstance(merged, list):
             raise ValueError('Gemini returned non-list')
         return jsonify(merged=merged, warning=False)
     except Exception as e:
-        app.logger.error(f'[merge-ingredients] {e}')
+        app.logger.error(f'[merge-ingredients] {type(e).__name__}: {e}')
         # Graceful degradation: return original list unchanged
         fallback = ingredients if 'ingredients' in locals() else []
         return jsonify(merged=fallback, warning=True)
