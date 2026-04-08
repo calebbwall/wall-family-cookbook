@@ -178,6 +178,22 @@ nav {
   }
   .mobile-nav-bar a:hover,
   .mobile-nav-bar a:active { background: var(--red); color: var(--white); border-color: var(--red); }
+  .mobile-nav-bar a.active { background: var(--red); color: var(--white); border-color: var(--red); }
+}
+
+/* ── Mobile search bar ───────────────────────────────────────── */
+.mobile-search-bar { display: none; }
+@media (max-width: 600px) {
+  .mobile-search-bar {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    background: var(--dark);
+    position: sticky;
+    top: 58px;
+    z-index: 98;
+  }
+  .mobile-nav-bar { top: calc(58px + 40px); }
 }
 
 /* ── Hero ─────────────────────────────────────────────────────── */

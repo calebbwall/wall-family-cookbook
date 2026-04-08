@@ -10,7 +10,11 @@ export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
   const [flipped, setFlipped] = useState(false)
   const rj = recipe.recipeJson
 
-  const handleFlip = useCallback(() => setFlipped(f => !f), [])
+  const [hintDismissed] = useState(() => !!localStorage.getItem('wfc_flipped'))
+  const handleFlip = useCallback(() => {
+    setFlipped(f => !f)
+    if (!localStorage.getItem('wfc_flipped')) localStorage.setItem('wfc_flipped', '1')
+  }, [])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -68,7 +72,7 @@ export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
                 onClick={e => e.stopPropagation()}>📸 Instagram</a>
             )}
             {rj.badge && <span className="front-badge">{rj.badge}</span>}
-            <span className="front-hint">TAP TO FLIP</span>
+            {!hintDismissed && <span className="front-hint">TAP TO FLIP</span>}
           </div>
           <button className="front-edit-btn" onClick={e => { e.stopPropagation(); onEdit(recipe.cardId) }} title="Edit recipe">✏️</button>
           <div className="front-body">

@@ -2006,6 +2006,9 @@ Input ingredients:
 
 # ── Serve cookbook (catch-all for non-API, non-upload paths) ─────────────────
 
+_SPA_INDEX_PATH = BASE_DIR / 'public' / 'dist' / 'index.html'
+_SPA_INDEX = _SPA_INDEX_PATH.read_text(encoding='utf-8') if _SPA_INDEX_PATH.exists() else None
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_cookbook(path):
@@ -2015,7 +2018,9 @@ def serve_cookbook(path):
     token = request.cookies.get(COOKIE_NAME, '')
     if token != VALID_TOKEN:
         return Response(build_gate_page(), mimetype='text/html')
-    # Render the cookbook with recipe cards injected
+    # Serve the React SPA if available, otherwise fall back to legacy
+    if _SPA_INDEX:
+        return Response(_SPA_INDEX, mimetype='text/html')
     return Response(build_page(), mimetype='text/html')
 
 

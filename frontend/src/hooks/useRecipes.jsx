@@ -20,6 +20,7 @@ export function RecipesProvider({ children }) {
   const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortMode, setSortMode] = useState('newest')
+  const [authorFilter, setAuthorFilter] = useState('')
 
   const loadRecipes = useCallback(async () => {
     try {
@@ -68,9 +69,12 @@ export function RecipesProvider({ children }) {
   // Group recipes by category with search/sort applied
   const getGrouped = useCallback(() => {
     let filtered = recipes
+    if (authorFilter) {
+      filtered = filtered.filter(r => (r.author || '') === authorFilter)
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      filtered = recipes.filter(r => {
+      filtered = filtered.filter(r => {
         const title = (r.recipeJson?.title || '').toLowerCase()
         const author = (r.author || '').toLowerCase()
         return title.includes(q) || author.includes(q)
@@ -99,7 +103,7 @@ export function RecipesProvider({ children }) {
       grouped[cat.key] = sorted.filter(r => r.category === cat.key)
     }
     return grouped
-  }, [recipes, searchQuery, sortMode])
+  }, [recipes, searchQuery, sortMode, authorFilter])
 
   const value = {
     recipes,
@@ -109,6 +113,8 @@ export function RecipesProvider({ children }) {
     setSearchQuery,
     sortMode,
     setSortMode,
+    authorFilter,
+    setAuthorFilter,
     addRecipe,
     editRecipe: editRecipeAction,
     deleteRecipe: deleteRecipeAction,
