@@ -9,6 +9,7 @@ export default defineConfig({
       '/uploads': 'http://localhost:5000',
     }
   },
+  base: '/dist/',
   build: {
     outDir: '../public/dist',
     emptyOutDir: true,

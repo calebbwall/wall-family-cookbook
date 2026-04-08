@@ -289,6 +289,23 @@ export function useGrocery() {
     await save(DEFAULT_STATE)
   }, [save])
 
+  const lockItem = useCallback(async (key, quantity, unit) => {
+    const newLocked = { ...(groceryState.locked || {}), [key]: { quantity, unit } }
+    await save({ ...groceryState, locked: newLocked })
+  }, [groceryState, save])
+
+  const unlockItem = useCallback(async (key) => {
+    const { [key]: _, ...rest } = groceryState.locked || {}
+    await save({ ...groceryState, locked: rest })
+  }, [groceryState, save])
+
+  const editManualItem = useCallback(async (id, updates) => {
+    const manualItems = (groceryState.manualItems || []).map(m =>
+      m.id === id ? { ...m, ...updates } : m
+    )
+    await save({ ...groceryState, manualItems })
+  }, [groceryState, save])
+
   const computed = useMemo(
     () => computeGroceryList(groceryState, allRecipes),
     [groceryState, allRecipes]
@@ -347,6 +364,9 @@ export function useGrocery() {
     addToPantry,
     clearPantry,
     clearAll,
+    lockItem,
+    unlockItem,
+    editManualItem,
     reload: loadState,
     recipeCount: groceryState.recipes.length,
   }
