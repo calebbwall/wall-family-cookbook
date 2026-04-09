@@ -20,7 +20,9 @@ export function RecipesProvider({ children }) {
   const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortMode, setSortMode] = useState('newest')
-  const [authorFilter, setAuthorFilter] = useState('')
+  const [authorFilter, setAuthorFilter] = useState(() => {
+    try { return localStorage.getItem('wfc_author_filter') || '' } catch { return '' }
+  })
 
   const loadRecipes = useCallback(async () => {
     try {
@@ -36,6 +38,11 @@ export function RecipesProvider({ children }) {
   }, [])
 
   useEffect(() => { loadRecipes() }, [loadRecipes])
+
+  // Persist author filter for returning users
+  useEffect(() => {
+    try { localStorage.setItem('wfc_author_filter', authorFilter) } catch {}
+  }, [authorFilter])
 
   const addRecipe = useCallback(async (payload) => {
     const result = await api.addRecipe(payload)

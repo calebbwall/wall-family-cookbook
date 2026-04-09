@@ -60,6 +60,8 @@ export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
       className={`flip-card${flipped ? ' flipped' : ''}`}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      role="button"
+      aria-label={`${rj.title} recipe card. ${flipped ? 'Press Escape to flip back.' : 'Press Enter to see full recipe.'}`}
     >
       <div className="flip-card-inner">
         {/* ── Front ── */}
@@ -75,6 +77,7 @@ export default function RecipeCard({ recipe, onEdit, onCook, onAddToGrocery }) {
             {!hintDismissed && <span className="front-hint">TAP TO FLIP</span>}
           </div>
           <button className="front-edit-btn" onClick={e => { e.stopPropagation(); onEdit(recipe.cardId) }} title="Edit recipe">✏️</button>
+          <button className="front-grocery-btn" onClick={e => { e.stopPropagation(); onAddToGrocery(recipe) }} title="Add to grocery list">🛒</button>
           <div className="front-body">
             <div>
               <h3 className="front-title">{rj.title}</h3>
