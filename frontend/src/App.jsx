@@ -45,8 +45,17 @@ function AppContent() {
       servings,
       baseServings: servings,
     }])
-    if (added > 0) showToast(`Added "${title}" to grocery list!`)
-    else showToast(`"${title}" is already in your grocery list`)
+    if (added > 0) {
+      showToast(`Added "${title}" to grocery list!`)
+      // Pulse the grocery badge for visual feedback
+      document.querySelectorAll('.grocery-badge, .grocery-badge-mobile').forEach(el => {
+        el.classList.remove('badge-pulse')
+        void el.offsetWidth // force reflow
+        el.classList.add('badge-pulse')
+      })
+    } else {
+      showToast(`"${title}" is already in your grocery list`)
+    }
   }, [grocery])
 
   const handleCloseCook = useCallback(() => {

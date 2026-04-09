@@ -102,8 +102,9 @@ export default function GroceryTab({ grocery, onClose }) {
         {!loading && !error && Object.keys(displayItems).length === 0 ? (
           <div className="grocery-empty" style={{ textAlign: 'center', padding: '3rem', color: 'var(--muted)' }}>
             <div style={{ fontSize: '3rem', marginBottom: '0.5rem', opacity: 0.3 }}>🛒</div>
-            <p style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.2rem', marginBottom: '0.3rem' }}>Your grocery list is empty</p>
-            <p style={{ fontSize: '0.85rem' }}>Add recipes to build your shopping list</p>
+            <p style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.2rem', marginBottom: '0.3rem', color: 'var(--dark)' }}>Your grocery list is empty</p>
+            <p style={{ fontSize: '0.85rem', marginBottom: '1.2rem' }}>Add recipes to build your shopping list</p>
+            <button className="grocery-btn" onClick={() => setPickerOpen(true)}>+ Add Recipes</button>
           </div>
         ) : (
           Object.entries(displayItems).map(([cat, items]) => {

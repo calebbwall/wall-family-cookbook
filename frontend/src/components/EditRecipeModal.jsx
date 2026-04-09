@@ -215,19 +215,26 @@ export default function EditRecipeModal({ cardId, onClose }) {
 
             <label className="modal-label">Ingredients</label>
             {(directFields.ingredients || []).map((ing, i) => (
-              <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem' }}>
+              <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem', alignItems: 'center' }}>
                 <input type="text" value={ing.name || ''} onChange={e => updateDirectIngredient(i, 'name', e.target.value)} placeholder="Ingredient" style={{ flex: 2 }} />
                 <input type="text" value={ing.amount || ''} onChange={e => updateDirectIngredient(i, 'amount', e.target.value)} placeholder="Amount" style={{ flex: 1 }} />
+                <button type="button" onClick={() => setDirectFields(prev => ({ ...prev, ingredients: prev.ingredients.filter((_, j) => j !== i) }))} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '1rem', cursor: 'pointer', padding: '0.2rem 0.4rem', flexShrink: 0 }} title="Remove">✕</button>
               </div>
             ))}
+            <button type="button" onClick={() => setDirectFields(prev => ({ ...prev, ingredients: [...(prev.ingredients || []), { name: '', amount: '' }] }))} style={{ background: 'none', border: '1.5px dashed var(--tan-dark)', borderRadius: 6, padding: '0.35rem 0.85rem', color: 'var(--brown)', fontSize: '0.82rem', cursor: 'pointer', marginTop: '0.3rem' }}>+ Add Ingredient</button>
 
             <label className="modal-label" style={{ marginTop: '0.8rem' }}>Steps</label>
             {(directFields.steps || []).map((s, i) => (
-              <div key={i} style={{ marginBottom: '0.5rem' }}>
-                <input type="text" value={s.title || ''} onChange={e => updateDirectStep(i, 'title', e.target.value)} placeholder="Step title" style={{ marginBottom: '0.3rem' }} />
+              <div key={i} style={{ marginBottom: '0.5rem', position: 'relative' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.3rem' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--red)', minWidth: '1.5rem' }}>{i + 1}.</span>
+                  <input type="text" value={s.title || ''} onChange={e => updateDirectStep(i, 'title', e.target.value)} placeholder="Step title" style={{ flex: 1 }} />
+                  <button type="button" onClick={() => setDirectFields(prev => ({ ...prev, steps: prev.steps.filter((_, j) => j !== i) }))} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '1rem', cursor: 'pointer', padding: '0.2rem 0.4rem', flexShrink: 0 }} title="Remove">✕</button>
+                </div>
                 <textarea value={s.detail || ''} onChange={e => updateDirectStep(i, 'detail', e.target.value)} placeholder="Step detail" style={{ minHeight: 50 }} />
               </div>
             ))}
+            <button type="button" onClick={() => setDirectFields(prev => ({ ...prev, steps: [...(prev.steps || []), { title: '', detail: '' }] }))} style={{ background: 'none', border: '1.5px dashed var(--tan-dark)', borderRadius: 6, padding: '0.35rem 0.85rem', color: 'var(--brown)', fontSize: '0.82rem', cursor: 'pointer', marginTop: '0.3rem' }}>+ Add Step</button>
 
             <label className="modal-label">Chef's Note</label>
             <textarea value={directFields.chefs_note || ''} onChange={e => updateDirectField('chefs_note', e.target.value)} style={{ minHeight: 50 }} />
