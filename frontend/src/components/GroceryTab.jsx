@@ -19,6 +19,7 @@ export default function GroceryTab({ grocery, onClose }) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
   useEffect(() => {
     if (Object.keys(computed).length > 0) runMerge()
@@ -70,7 +71,7 @@ export default function GroceryTab({ grocery, onClose }) {
           <button className="grocery-btn" onClick={() => setPickerOpen(true)}>+ Add Recipes</button>
           <button className="grocery-btn grocery-btn-outline" onClick={() => setManualOpen(true)}>+ Manual Item</button>
           <button className="grocery-btn grocery-btn-outline" onClick={handleExport}>📋 Copy List</button>
-          <button className="grocery-btn grocery-btn-danger" onClick={() => { if (window.confirm('Clear entire grocery list? This cannot be undone.')) clearAll() }}>Clear All</button>
+          <button className="grocery-btn grocery-btn-danger" onClick={() => setClearConfirmOpen(true)}>Clear All</button>
         </div>
       </div>
 
@@ -186,6 +187,20 @@ export default function GroceryTab({ grocery, onClose }) {
           onUnlock={async () => { await unlockItem(editingItem.key); showToast('Reset to recipe amount'); setEditingItem(null) }}
           onClose={() => setEditingItem(null)}
         />
+      )}
+
+      {clearConfirmOpen && (
+        <div onClick={() => setClearConfirmOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 550, background: 'rgba(42,26,14,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🗑️</div>
+            <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.2rem', marginBottom: '0.5rem', color: 'var(--dark)' }}>Clear grocery list?</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: '1.5rem' }}>This will remove all recipes, items, and pantry data. This cannot be undone.</p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => setClearConfirmOpen(false)} style={{ flex: 1, padding: '0.7rem', borderRadius: 8, border: '1.5px solid var(--tan-dark)', background: 'none', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, color: 'var(--muted)' }}>Cancel</button>
+              <button onClick={() => { clearAll(); setClearConfirmOpen(false); showToast('Grocery list cleared') }} style={{ flex: 1, padding: '0.7rem', borderRadius: 8, border: 'none', background: '#c0392b', color: 'white', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Clear All</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

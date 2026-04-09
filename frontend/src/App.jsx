@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { RecipesProvider, useRecipes, CATEGORIES } from './hooks/useRecipes'
 import { useGrocery } from './hooks/useGrocery'
 import { useChat } from './hooks/useChat'
@@ -19,6 +19,7 @@ function AppContent() {
   const [chatOpen, setChatOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const scrollPosRef = useRef(0)
 
   const grocery = useGrocery()
   const chatHook = useChat()
@@ -88,14 +89,14 @@ function AppContent() {
     <>
       <Nav
         onAddRecipe={() => setAddModalOpen(true)}
-        onGrocery={() => setGroceryOpen(true)}
+        onGrocery={() => { scrollPosRef.current = window.scrollY; setGroceryOpen(true) }}
         groceryCount={grocery.recipeCount}
       />
 
       {groceryOpen ? (
         <GroceryTab
           grocery={grocery}
-          onClose={() => setGroceryOpen(false)}
+          onClose={() => { setGroceryOpen(false); requestAnimationFrame(() => window.scrollTo(0, scrollPosRef.current)) }}
         />
       ) : (
         <>

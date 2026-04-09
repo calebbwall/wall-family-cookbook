@@ -101,29 +101,23 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
   const allStepsDone = completedSteps.size === totalSteps && totalSteps > 0
 
   return (
-    <div id="cook-mode-overlay" style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+    <div className="cook-mode-react">
       {/* Header */}
-      <div className="cook-mode-header" style={{ background: 'var(--red)', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <span style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.2rem', fontWeight: 700, color: 'var(--white)' }}>
-          🍳 {rj.title}
-        </span>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={onAskAI} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'var(--white)', padding: '0.4rem 0.9rem', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>
-            💬 Ask AI
-          </button>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'var(--white)', padding: '0.4rem 0.9rem', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>
-            ✕ Exit
-          </button>
+      <div className="cook-mode-header">
+        <span className="cook-mode-title">🍳 {rj.title}</span>
+        <div className="cook-mode-actions">
+          <button className="cook-mode-header-btn" onClick={onAskAI}>💬 Ask AI</button>
+          <button className="cook-mode-header-btn" onClick={onClose}>✕ Exit</button>
         </div>
       </div>
 
-      <div className="cook-mode-body" style={{ flex: 1, padding: '1.5rem', maxWidth: 700, margin: '0 auto', width: '100%' }}>
+      <div className="cook-mode-body">
         {/* Servings scaler */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', padding: '0.75rem 1rem', background: 'var(--white)', borderRadius: 8, border: '1px solid var(--tan)' }}>
-          <span style={{ fontWeight: 700, color: 'var(--brown)' }}>Servings:</span>
-          <button onClick={() => setServings(s => Math.max(1, s - 1))} style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid var(--red)', background: 'none', color: 'var(--red)', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 700 }}>−</button>
+        <div className="cook-mode-servings-box">
+          <span className="cook-mode-servings-label-text">Servings:</span>
+          <button className="cook-mode-servings-adjust" onClick={() => setServings(s => Math.max(1, s - 1))}>−</button>
           <span style={{ fontSize: '1.2rem', fontWeight: 700, minWidth: 30, textAlign: 'center' }}>{servings}</span>
-          <button onClick={() => setServings(s => s + 1)} style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid var(--red)', background: 'none', color: 'var(--red)', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 700 }}>+</button>
+          <button className="cook-mode-servings-adjust" onClick={() => setServings(s => s + 1)}>+</button>
           {ratio !== 1 && (
             <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontStyle: 'italic' }}>
               (scaled {ratio.toFixed(1)}×)
@@ -143,9 +137,9 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
         {/* Ingredients */}
         {rj.ingredients?.length > 0 && (
           <div style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--red)', marginBottom: '0.6rem', borderBottom: '1px solid var(--tan)', paddingBottom: '0.35rem' }}>Ingredients</h3>
+            <h3 className="cook-mode-section-heading">Ingredients</h3>
             {rj.ingredients.map((ing, i) => (
-              <div key={i} onClick={() => toggleIng(i)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid var(--tan)', cursor: 'pointer', opacity: checkedIngs.has(i) ? 0.4 : 1, textDecoration: checkedIngs.has(i) ? 'line-through' : 'none' }}>
+              <div key={i} className={`cook-mode-ing-row${checkedIngs.has(i) ? ' checked' : ''}`} onClick={() => toggleIng(i)}>
                 <input type="checkbox" checked={checkedIngs.has(i)} onChange={() => toggleIng(i)} onClick={e => e.stopPropagation()} className="ing-check" />
                 <span style={{ flex: 1 }}>{ing.name}</span>
                 <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{scaleAmount(ing.amount, ratio)}</span>
@@ -157,14 +151,14 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
         {/* Steps */}
         {rj.steps?.length > 0 && (
           <div>
-            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--red)', marginBottom: '0.6rem', borderBottom: '1px solid var(--tan)', paddingBottom: '0.35rem' }}>Method</h3>
+            <h3 className="cook-mode-section-heading">Method</h3>
             {rj.steps.map((step, i) => (
-              <div key={i} style={{ marginBottom: '1rem', padding: '0.75rem', background: completedSteps.has(i) ? '#e8f5e9' : 'var(--white)', borderRadius: 8, border: `1px solid ${completedSteps.has(i) ? '#a5d6a7' : 'var(--tan)'}`, cursor: 'pointer', transition: 'background 0.2s' }}>
+              <div key={i} className={`cook-mode-step-card${completedSteps.has(i) ? ' completed' : ''}`}>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }} onClick={() => toggleStep(i)}>
-                  <span style={{ flexShrink: 0, width: 28, height: 28, background: completedSteps.has(i) ? '#4caf50' : 'var(--red)', color: 'var(--white)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem' }}>
+                  <span className={`cook-mode-step-num${completedSteps.has(i) ? ' completed' : ''}`}>
                     {completedSteps.has(i) ? '✓' : i + 1}
                   </span>
-                  <div style={{ flex: 1, textDecoration: completedSteps.has(i) ? 'line-through' : 'none', opacity: completedSteps.has(i) ? 0.6 : 1 }}>
+                  <div className={`cook-mode-step-detail${completedSteps.has(i) ? ' completed' : ''}`}>
                     {step.title && <strong style={{ display: 'block', marginBottom: '0.2rem' }}>{step.title}</strong>}
                     <p style={{ fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>{step.detail}</p>
                   </div>
@@ -172,16 +166,16 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
                 </div>
                 {/* Timer */}
                 {step.timer_secs > 0 && (
-                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', paddingLeft: '2.5rem' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: '1.1rem', fontWeight: 700, color: timers[i]?.remaining <= 10 ? 'var(--red)' : 'var(--dark)' }}>
+                  <div className="cook-mode-timer-row">
+                    <span className={`cook-mode-timer-display${timers[i]?.remaining <= 10 ? ' warning' : ''}`}>
                       {formatTime(timers[i]?.remaining ?? step.timer_secs)}
                     </span>
                     {!timers[i]?.running ? (
-                      <button onClick={() => startTimer(i, timers[i]?.remaining ?? step.timer_secs)} style={{ background: 'var(--red)', color: 'white', border: 'none', padding: '0.3rem 0.7rem', borderRadius: 4, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>▶ Start</button>
+                      <button className="cook-mode-timer-btn start" onClick={() => startTimer(i, timers[i]?.remaining ?? step.timer_secs)}>▶ Start</button>
                     ) : (
-                      <button onClick={() => pauseTimer(i)} style={{ background: 'var(--brown)', color: 'white', border: 'none', padding: '0.3rem 0.7rem', borderRadius: 4, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>⏸ Pause</button>
+                      <button className="cook-mode-timer-btn pause" onClick={() => pauseTimer(i)}>⏸ Pause</button>
                     )}
-                    <button onClick={() => resetTimer(i, step.timer_secs)} style={{ background: 'none', border: '1px solid var(--tan-dark)', padding: '0.3rem 0.7rem', borderRadius: 4, cursor: 'pointer', fontSize: '0.78rem', color: 'var(--muted)' }}>↺ Reset</button>
+                    <button className="cook-mode-timer-btn reset" onClick={() => resetTimer(i, step.timer_secs)}>↺ Reset</button>
                   </div>
                 )}
               </div>
@@ -190,7 +184,7 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
         )}
 
         {allStepsDone && (
-          <div style={{ textAlign: 'center', padding: '2rem', marginTop: '1rem' }}>
+          <div className="cook-mode-celebration">
             <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎉</div>
             <p style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--dark)' }}>All steps complete!</p>
             <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>Enjoy your meal!</p>
@@ -200,12 +194,12 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
         {/* Calibration Notes */}
         {rj.calibration_notes?.length > 0 && (
           <div style={{ marginTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--red)', marginBottom: '0.6rem' }}>Calibration Notes</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <h3 className="cook-mode-section-heading">Calibration Notes</h3>
+            <div className="b-notes-grid">
               {rj.calibration_notes.map((note, i) => (
-                <div key={i} style={{ background: 'var(--red-faint)', borderLeft: '3px solid var(--red)', padding: '0.5rem 0.7rem', borderRadius: '0 6px 6px 0' }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--red)', marginBottom: '0.15rem' }}>{note.goal}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text)', lineHeight: 1.4 }}>{note.tip}</div>
+                <div key={i} className="b-note" style={{ background: 'var(--red-faint)' }}>
+                  <div className="b-note-goal" style={{ color: 'var(--red)' }}>{note.goal}</div>
+                  <div className="b-note-tip" style={{ color: 'var(--text)' }}>{note.tip}</div>
                 </div>
               ))}
             </div>
@@ -215,12 +209,12 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
 
       {/* Step Zoom Overlay */}
       {zoomStep !== null && rj.steps?.[zoomStep] && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 700, background: 'var(--dark)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', color: 'var(--white)' }}>
-          <button onClick={() => setZoomStep(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+        <div className="cook-mode-zoom">
+          <button className="cook-mode-zoom-close" onClick={() => setZoomStep(null)}>✕</button>
           <div style={{ fontSize: '0.82rem', color: 'var(--tan-dark)', marginBottom: '1rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             Step {zoomStep + 1} of {totalSteps}
           </div>
-          <div style={{ width: 80, height: 80, background: 'var(--red)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 700, marginBottom: '1.5rem' }}>
+          <div style={{ width: 80, height: 80, background: 'var(--red)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--white)' }}>
             {zoomStep + 1}
           </div>
           {rj.steps[zoomStep].title && (
@@ -235,16 +229,16 @@ export default function CookMode({ recipe, onClose, onAskAI }) {
                 {formatTime(timers[zoomStep]?.remaining ?? rj.steps[zoomStep].timer_secs)}
               </span>
               {!timers[zoomStep]?.running ? (
-                <button onClick={() => startTimer(zoomStep, timers[zoomStep]?.remaining ?? rj.steps[zoomStep].timer_secs)} style={{ background: 'var(--red)', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>▶ Start</button>
+                <button className="cook-mode-timer-btn start" style={{ padding: '0.5rem 1rem', borderRadius: 6 }} onClick={() => startTimer(zoomStep, timers[zoomStep]?.remaining ?? rj.steps[zoomStep].timer_secs)}>▶ Start</button>
               ) : (
-                <button onClick={() => pauseTimer(zoomStep)} style={{ background: 'var(--brown)', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>⏸ Pause</button>
+                <button className="cook-mode-timer-btn pause" style={{ padding: '0.5rem 1rem', borderRadius: 6 }} onClick={() => pauseTimer(zoomStep)}>⏸ Pause</button>
               )}
-              <button onClick={() => resetTimer(zoomStep, rj.steps[zoomStep].timer_secs)} style={{ background: 'none', border: '1px solid var(--tan-dark)', color: 'var(--tan)', padding: '0.5rem 1rem', borderRadius: 6, cursor: 'pointer' }}>↺ Reset</button>
+              <button className="cook-mode-timer-btn reset" style={{ padding: '0.5rem 1rem', borderRadius: 6 }} onClick={() => resetTimer(zoomStep, rj.steps[zoomStep].timer_secs)}>↺ Reset</button>
             </div>
           )}
-          <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
-            <button onClick={() => setZoomStep(s => Math.max(0, s - 1))} disabled={zoomStep === 0} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'var(--tan)', padding: '0.6rem 1.5rem', borderRadius: 6, cursor: zoomStep === 0 ? 'default' : 'pointer', opacity: zoomStep === 0 ? 0.3 : 1, fontWeight: 600 }}>← Prev</button>
-            <button onClick={() => setZoomStep(s => Math.min(totalSteps - 1, s + 1))} disabled={zoomStep === totalSteps - 1} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'var(--tan)', padding: '0.6rem 1.5rem', borderRadius: 6, cursor: zoomStep === totalSteps - 1 ? 'default' : 'pointer', opacity: zoomStep === totalSteps - 1 ? 0.3 : 1, fontWeight: 600 }}>Next →</button>
+          <div className="cook-mode-zoom-nav">
+            <button onClick={() => setZoomStep(s => Math.max(0, s - 1))} disabled={zoomStep === 0}>← Prev</button>
+            <button onClick={() => setZoomStep(s => Math.min(totalSteps - 1, s + 1))} disabled={zoomStep === totalSteps - 1}>Next →</button>
           </div>
         </div>
       )}
