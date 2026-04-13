@@ -9,6 +9,32 @@
 /* ── Reset & Variables ────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Skip to content (keyboard accessibility) ────────────────── */
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 9999;
+  background: var(--red);
+  color: var(--white);
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 0 0 8px 0;
+}
+.skip-to-content:focus {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
+
 /* ── Focus indicators for keyboard nav ───────────────────────── */
 :focus-visible {
   outline: 2px solid var(--red);
@@ -251,6 +277,19 @@ nav {
 }
 
 .hero-content { position: relative; z-index: 1; max-width: 760px; }
+
+/* ── Compact hero for returning visitors ─────────────────────── */
+.hero-compact {
+  min-height: 32vh;
+  padding: 2rem 2rem;
+}
+.hero-compact .hero-tagline { display: none; }
+.hero-compact .hero-rule { margin: 1rem auto; }
+.hero-compact .hero-pills { margin-top: 1rem; }
+.hero-compact .hero-eyebrow { margin-bottom: 0.6rem; }
+@media (max-width: 600px) {
+  .hero-compact { min-height: unset; padding: 1.5rem 1.5rem 1rem; }
+}
 
 .hero-eyebrow {
   font-size: 0.75rem;
@@ -2819,6 +2858,37 @@ footer strong {
 }
 .grocery-back-btn:hover { text-decoration: underline; }
 
+/* ── App layout (split-view support) ─────────────────────────── */
+.app-layout { display: flex; min-height: calc(100vh - 60px); }
+.app-main { flex: 1; min-width: 0; }
+
+/* On narrow screens: grocery replaces recipes (existing behavior) */
+.app-grocery-sidebar { display: none; }
+.app-grocery-only { display: block; }
+.app-recipes-with-sidebar { display: none; }
+
+/* On wide desktops: side-by-side split view */
+@media (min-width: 1400px) {
+  .app-layout-split .app-grocery-only { display: none; }
+  .app-layout-split .app-recipes-with-sidebar { display: block; }
+  .app-layout-split .app-grocery-sidebar {
+    display: block;
+    width: 420px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--tan);
+    background: var(--cream);
+    overflow-y: auto;
+    height: calc(100vh - 60px);
+    position: sticky;
+    top: 60px;
+  }
+  .app-layout-split .app-grocery-sidebar .grocery-tab {
+    max-width: none;
+    padding: 1rem;
+  }
+  .app-layout-split .app-grocery-sidebar .grocery-close-btn { display: none; }
+}
+
 /* ── Desktop: multi-column card grid ─────────────────────────── */
 @media (min-width: 900px) {
   .card-grid { grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
@@ -2826,4 +2896,8 @@ footer strong {
 }
 @media (min-width: 1400px) {
   .card-grid { grid-template-columns: repeat(3, 1fr); }
+}
+/* When split-view is active, reduce grid to 2 columns */
+@media (min-width: 1400px) {
+  .app-layout-split .card-grid { grid-template-columns: repeat(2, 1fr); }
 }
