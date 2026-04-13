@@ -1,8 +1,15 @@
+import { useState } from 'react'
 import { CATEGORIES } from '../hooks/useRecipes'
 
 export default function Hero() {
+  const [isReturning] = useState(() => {
+    const visited = localStorage.getItem('wfc_visited')
+    if (!visited) { localStorage.setItem('wfc_visited', '1'); return false }
+    return true
+  })
+
   return (
-    <header className="hero" id="top">
+    <header className={`hero${isReturning ? ' hero-compact' : ''}`} id="top">
       <div className="hero-content">
         <p className="hero-eyebrow">A Family Recipe Collection</p>
         <h1 className="hero-title">
