@@ -61,7 +61,7 @@ export default function AddRecipeModal({ onClose }) {
       setStatus('Analyzing recipe…')
       const result = await api.extractRecipe(payload)
       if (result.error) throw new Error(result.error)
-      setReviewData(result.recipe || result)
+      setReviewData(result.recipeJson || result.recipe || result)
       setStep('review')
       setStatus('')
     } catch (e) {
