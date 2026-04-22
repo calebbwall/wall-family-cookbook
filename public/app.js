@@ -1020,10 +1020,11 @@ let _composerPhotoUrl  = '';
 let _composerIgText    = '';
 let _cachedRecipeJson  = null;
 let _cachedSourceType  = 'text';
+let _cachedAuthorName  = '';
 
 function openAddModal() {
   document.getElementById('add-author').value =
-    localStorage.getItem('wfc_author') || '';
+    localStorage.getItem('wfc_author') || _getHousehold() || '';
   showComposeStep();
   document.getElementById('add-recipe-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -1194,6 +1195,7 @@ async function startExtraction() {
 
     _cachedRecipeJson = data.recipeJson || {};
     _cachedSourceType = data.sourceType || _composerMode;
+    _cachedAuthorName = authorName;
     localStorage.setItem('wfc_author', authorName);
     _populateReviewForm(_cachedRecipeJson);
     document.getElementById('add-step-compose').style.display = 'none';
@@ -1355,7 +1357,7 @@ async function saveFromReview() {
   const btn    = document.getElementById('review-save-btn');
   const status = document.getElementById('review-status');
   const category   = document.getElementById('add-category').value;
-  const authorName = document.getElementById('add-author').value.trim();
+  const authorName = _cachedAuthorName || document.getElementById('add-author').value.trim();
 
   if (!category) {
     status.style.display = 'block';
